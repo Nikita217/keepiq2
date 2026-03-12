@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import select
 
-from bot.keyboards import mini_app_keyboard, mini_app_reply_keyboard
+from bot.keyboards import mini_app_keyboard
 from db.session import SessionLocal
 from models import IncomingItem, Reminder, Task
 from models.enums import ParseStatus
@@ -20,20 +20,15 @@ async def cmd_start(message: Message) -> None:
     mini_app_url = settings.mini_app_public_url or settings.mini_app_dev_url
     text = (
         "KeepIQ принимает текст, голосовые, ссылки, фото, скрины и пересланные сообщения.\n"
-        "Отправь входящее как есть. Если нижняя кнопка не открывает Mini App, нажми inline-кнопку в этом сообщении."
+        "Отправь входящее как есть. Если постоянная кнопка KeepIQ внизу не открывает Mini App, нажми кнопку в этом сообщении."
     )
     await message.answer(text, reply_markup=mini_app_keyboard(mini_app_url))
-    await message.answer(
-        "Постоянная кнопка Mini App добавлена ниже.",
-        reply_markup=mini_app_reply_keyboard(mini_app_url),
-    )
 
 
 @router.message(Command("open"))
 async def cmd_open(message: Message) -> None:
     mini_app_url = settings.mini_app_public_url or settings.mini_app_dev_url
     await message.answer("Открой KeepIQ кнопкой ниже.", reply_markup=mini_app_keyboard(mini_app_url))
-    await message.answer("Постоянная кнопка тоже доступна ниже.", reply_markup=mini_app_reply_keyboard(mini_app_url))
 
 
 @router.message(Command("inbox"))

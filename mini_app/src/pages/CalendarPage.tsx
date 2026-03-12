@@ -1,10 +1,26 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 
 import { EmptyState } from "../components/EmptyState";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { CalendarEntry } from "../types";
 import { dayKey, formatLongDateTime, isSameDay, startOfDay } from "../utils/date";
 import { calendarMap, getTypeLabel } from "../utils/models";
+
+const VIEW_LABELS = {
+  day: "\u0414\u0435\u043d\u044c",
+  week: "\u041d\u0435\u0434\u0435\u043b\u044f",
+  month: "\u041c\u0435\u0441\u044f\u0446",
+} as const;
+
+const WEEKDAY_LABELS = [
+  "\u041f\u043d",
+  "\u0412\u0442",
+  "\u0421\u0440",
+  "\u0427\u0442",
+  "\u041f\u0442",
+  "\u0421\u0431",
+  "\u0412\u0441",
+];
 
 function buildMonthDays(cursor: Date): Date[] {
   const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -35,14 +51,14 @@ export function CalendarPage({ entries, onOpen }: { entries: CalendarEntry[]; on
   return (
     <div className="screenStack">
       <ScreenHeader
-        eyebrow="Календарь"
-        title="Даты без хаоса"
-        subtitle="Один календарный слой для задач, событий, напоминаний и reply later. Переключайтесь между днём, неделей и месяцем без отдельного экрана для каждого типа."
+        eyebrow={"\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c"}
+        title={"\u0414\u0430\u0442\u044b \u0431\u0435\u0437 \u0445\u0430\u043e\u0441\u0430"}
+        subtitle={"\u041e\u0434\u0438\u043d \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0439 \u0441\u043b\u043e\u0439 \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u0447, \u0441\u043e\u0431\u044b\u0442\u0438\u0439, \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0439 \u0438 reply later. \u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435\u0441\u044c \u043c\u0435\u0436\u0434\u0443 \u0434\u043d\u0435\u043c, \u043d\u0435\u0434\u0435\u043b\u0435\u0439 \u0438 \u043c\u0435\u0441\u044f\u0446\u0435\u043c \u0431\u0435\u0437 \u0440\u0430\u0437\u043d\u044b\u0445 \u044d\u043a\u0440\u0430\u043d\u043e\u0432 \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0433\u043e \u0442\u0438\u043f\u0430."}
         actions={
           <div className="headerButtonRow">
             {(["day", "week", "month"] as const).map((mode) => (
               <button key={mode} type="button" className={view === mode ? "ghost activeGhost" : "ghost"} onClick={() => setView(mode)}>
-                {mode === "day" ? "День" : mode === "week" ? "Неделя" : "Месяц"}
+                {VIEW_LABELS[mode]}
               </button>
             ))}
           </div>
@@ -51,32 +67,37 @@ export function CalendarPage({ entries, onOpen }: { entries: CalendarEntry[]; on
 
       {view === "month" ? (
         <section className="sectionBlock">
-          <div className="sectionHead">
-            <h2>{monthCursor.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</h2>
-            <div className="headerButtonRow">
-              <button type="button" className="ghost" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{"<"}</button>
-              <button type="button" className="ghost" onClick={() => setMonthCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>Сегодня</button>
-              <button type="button" className="ghost" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{">"}</button>
+          <div className="monthHeader">
+            <div>
+              <h2>{monthCursor.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</h2>
+              <p className="sectionNote">{"\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u0434\u0435\u043d\u044c, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u0432\u0441\u0435 \u043e\u0431\u044a\u0435\u043a\u0442\u044b \u043d\u0430 \u044d\u0442\u0443 \u0434\u0430\u0442\u0443."}</p>
+            </div>
+            <div className="monthNav">
+              <button type="button" className="ghost monthNavButton" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>{"<"}</button>
+              <button type="button" className="ghost" onClick={() => setMonthCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>{"\u0421\u0435\u0433\u043e\u0434\u043d\u044f"}</button>
+              <button type="button" className="ghost monthNavButton" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>{">"}</button>
             </div>
           </div>
-          <div className="calendarWeekdays">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label) => <span key={label}>{label}</span>)}</div>
-          <div className="calendarGrid">
-            {monthDays.map((day) => {
-              const items = agenda.get(dayKey(day)) ?? [];
-              return (
-                <button
-                  key={dayKey(day)}
-                  type="button"
-                  className={`calendarCell${day.getMonth() === monthCursor.getMonth() ? "" : " mutedCell"}${isSameDay(day, selectedDate) ? " selectedCell" : ""}${isSameDay(day, today) ? " todayCell" : ""}`}
-                  onClick={() => setSelectedDate(day)}
-                >
-                  <strong>{day.getDate()}</strong>
-                  <div className="calendarBadges">
-                    {items.slice(0, 3).map((item) => <span key={item.key} className={`calendarBadge badge-${item.kind}`}>{getTypeLabel(item.kind)}</span>)}
-                  </div>
-                </button>
-              );
-            })}
+          <div className="calendarBoard">
+            <div className="calendarWeekdays">{WEEKDAY_LABELS.map((label) => <span key={label}>{label}</span>)}</div>
+            <div className="calendarGrid">
+              {monthDays.map((day) => {
+                const items = agenda.get(dayKey(day)) ?? [];
+                return (
+                  <button
+                    key={dayKey(day)}
+                    type="button"
+                    className={`calendarCell${day.getMonth() === monthCursor.getMonth() ? "" : " mutedCell"}${isSameDay(day, selectedDate) ? " selectedCell" : ""}${isSameDay(day, today) ? " todayCell" : ""}`}
+                    onClick={() => setSelectedDate(day)}
+                  >
+                    <strong>{day.getDate()}</strong>
+                    <div className="calendarBadges">
+                      {items.slice(0, 2).map((item) => <span key={item.key} className={`calendarBadge badge-${item.kind}`}>{getTypeLabel(item.kind)}</span>)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
       ) : null}
@@ -90,7 +111,7 @@ export function CalendarPage({ entries, onOpen }: { entries: CalendarEntry[]; on
                 <button key={dayKey(day)} type="button" className={isSameDay(day, selectedDate) ? "weekDay active" : "weekDay"} onClick={() => setSelectedDate(day)}>
                   <span>{day.toLocaleDateString("ru-RU", { weekday: "short" })}</span>
                   <strong>{day.getDate()}</strong>
-                  <small>{items.length} шт.</small>
+                  <small>{`${items.length} \u0448\u0442.`}</small>
                 </button>
               );
             })}
@@ -108,10 +129,10 @@ export function CalendarPage({ entries, onOpen }: { entries: CalendarEntry[]; on
 
       <section className="sectionBlock">
         <div className="sectionHead">
-          <h2>План на выбранную дату</h2>
+          <h2>{"\u041f\u043b\u0430\u043d \u043d\u0430 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u0443\u044e \u0434\u0430\u0442\u0443"}</h2>
           <span>{selectedItems.length}</span>
         </div>
-        {selectedItems.length === 0 ? <EmptyState title="Пусто" text="На эту дату пока нет активных объектов." /> : null}
+        {selectedItems.length === 0 ? <EmptyState title={"\u041f\u0443\u0441\u0442\u043e"} text={"\u041d\u0430 \u044d\u0442\u0443 \u0434\u0430\u0442\u0443 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432."} /> : null}
         <div className="agendaList">
           {selectedItems.map((item) => (
             <button key={item.key} type="button" className="agendaCard" onClick={() => onOpen(item)}>

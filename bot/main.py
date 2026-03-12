@@ -1,10 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 
 from aiogram import Bot, Dispatcher
-from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand
 
+from bot.keyboards import mini_app_menu_button
 from bot.router import build_router
 from db.bootstrap import create_all
 from db.session import engine
@@ -20,15 +21,13 @@ async def main() -> None:
     mini_app_url = settings.mini_app_public_url or settings.mini_app_dev_url
     await bot.set_my_commands(
         [
-            BotCommand(command="start", description="Open inbox assistant"),
-            BotCommand(command="open", description="Open Mini App"),
-            BotCommand(command="inbox", description="Show pending inbox items"),
-            BotCommand(command="today", description="Show today overview"),
+            BotCommand(command="start", description="Запустить KeepIQ"),
+            BotCommand(command="open", description="Открыть Mini App"),
+            BotCommand(command="inbox", description="Показать входящие"),
+            BotCommand(command="today", description="Показать сегодня"),
         ]
     )
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="Open KeepIQ", web_app=WebAppInfo(url=mini_app_url))
-    )
+    await bot.set_chat_menu_button(menu_button=mini_app_menu_button(mini_app_url))
     dispatcher = Dispatcher()
     dispatcher.include_router(build_router())
     await dispatcher.start_polling(bot)
