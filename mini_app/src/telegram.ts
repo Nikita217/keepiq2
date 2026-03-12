@@ -1,4 +1,4 @@
-declare global {
+﻿declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
@@ -27,6 +27,10 @@ export function getTelegramUserId(): number | null {
 
 export function isInsideTelegram(): boolean {
   return Boolean(window.Telegram?.WebApp);
+}
+
+export function isLocalDevHost(): boolean {
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
 }
 
 export function prepareTelegramWebApp(): void {

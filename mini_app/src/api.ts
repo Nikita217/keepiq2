@@ -1,4 +1,4 @@
-import {
+﻿import {
   DashboardResponse,
   EventItem,
   IncomingItem,
@@ -10,11 +10,11 @@ import {
   SearchResult,
   TaskItem,
 } from "./types";
-import { getInitData, getTelegramUserId, isInsideTelegram } from "./telegram";
+import { getInitData, getTelegramUserId, isInsideTelegram, isLocalDevHost } from "./telegram";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-function buildHeaders(path: string, init?: RequestInit): HeadersInit {
+function buildHeaders(init?: RequestInit): HeadersInit {
   const headers: Record<string, string> = {};
   const providedHeaders = new Headers(init?.headers ?? {});
 
@@ -39,7 +39,7 @@ function buildHeaders(path: string, init?: RequestInit): HeadersInit {
     return headers;
   }
 
-  if (!isInsideTelegram()) {
+  if (isLocalDevHost()) {
     headers["X-Telegram-User-Id"] = "1";
   }
 
@@ -50,7 +50,7 @@ function buildErrorMessage(response: Response, body: string): string {
   if (response.status === 401) {
     return isInsideTelegram()
       ? "Mini App did not pass Telegram authentication. Reopen it from the bot menu or /start button."
-      : "This session is not authenticated. Open the app from Telegram or use local dev fallback.";
+      : "This session is not authenticated. Open the app from Telegram. Local fallback works only on localhost.";
   }
   return `API error ${response.status}: ${body || response.statusText}`;
 }
@@ -68,7 +68,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: buildHeaders(path, init),
+      headers: buildHeaders(init),
     });
   } catch (error) {
     throw new Error(buildNetworkErrorMessage(path, error));

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_session
 from services.auth import TelegramInitDataService
 from services.users import UserService
+from utils.settings import get_settings
 
 
 async def get_db_session(session: AsyncSession = Depends(get_session)) -> AsyncSession:
@@ -20,6 +21,7 @@ async def get_current_user(
     x_telegram_user_id: int | None = Header(default=None),
 ):
     user_service = UserService(session)
+    settings = get_settings()
     if x_telegram_init_data:
         pairs = TelegramInitDataService().verify(x_telegram_init_data)
         user_payload = json.loads(pairs.get("user", "{}"))
@@ -33,7 +35,7 @@ async def get_current_user(
             language_code=user_payload.get("language_code"),
         )
 
-    if x_telegram_user_id:
+    if x_telegram_user_id and settings.app_env != "production":
         return await user_service.ensure_user(
             telegram_user_id=int(x_telegram_user_id),
             first_name="Local",
