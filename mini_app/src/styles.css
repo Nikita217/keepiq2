@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #f3ede2;
   --bg-soft: #fbf6ee;
   --ink: #18221f;
@@ -24,11 +24,16 @@ button {
   background: var(--accent);
   color: white;
   padding: 0.8rem 1rem;
+  cursor: pointer;
 }
 button.ghost {
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
+}
+button.danger {
+  color: #8e2d18;
+  border-color: rgba(142, 45, 24, 0.24);
 }
 input {
   width: 100%;
@@ -64,6 +69,9 @@ input {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
 }
+.navGridWide {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
 .navChip {
   background: rgba(255,255,255,0.68);
   color: var(--ink);
@@ -77,6 +85,9 @@ input {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
+}
+.calendarLayout {
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
 }
 .stack { display: grid; gap: 1rem; }
 .card {
@@ -130,6 +141,25 @@ input {
   gap: 0.7rem;
   margin-top: 1rem;
 }
+.wrapRow {
+  flex-wrap: wrap;
+}
+.toolbarRow {
+  display: grid;
+  gap: 0.75rem;
+}
+.segmentedRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.fieldRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
 .searchBox {
   display: grid;
   gap: 0.45rem;
@@ -139,9 +169,82 @@ input {
   border-radius: 24px;
   background: rgba(255,255,255,0.72);
 }
+.calendarWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.calendarCell {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-height: 108px;
+  padding: 0.8rem;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.6);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+.calendarCell strong {
+  font-size: 1rem;
+}
+.calendarCell.mutedCell {
+  opacity: 0.45;
+}
+.calendarCell.selectedCell {
+  border-color: rgba(31, 108, 93, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(31, 108, 93, 0.24);
+}
+.calendarCell.todayCell strong {
+  color: var(--accent);
+}
+.calendarBadges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.calendarBadge {
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  background: rgba(24, 34, 31, 0.08);
+  color: var(--ink);
+}
+.badge-task {
+  background: rgba(212, 111, 52, 0.16);
+}
+.badge-event {
+  background: rgba(31, 108, 93, 0.16);
+}
+.badge-reminder {
+  background: rgba(66, 92, 181, 0.16);
+}
+@media (max-width: 900px) {
+  .calendarLayout {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 720px) {
-  .navGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .navGrid, .navGridWide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actionsRow { flex-direction: column; }
+  .fieldRow {
+    grid-template-columns: 1fr;
+  }
+  .calendarGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .calendarWeekdays {
+    display: none;
+  }
 }
 
 .errorBanner {
@@ -154,7 +257,7 @@ input {
 }
 
 .syncHint {
-  margin: 0 0 1rem;
+  margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
 }

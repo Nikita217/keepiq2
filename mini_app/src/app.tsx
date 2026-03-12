@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 import { api } from "./api";
 import { NavBar, TabKey } from "./components/NavBar";
@@ -10,6 +10,7 @@ import { NotesPage } from "./pages/NotesPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TasksPage } from "./pages/TasksPage";
 import { TodayPage } from "./pages/TodayPage";
+import { CalendarPage } from "./pages/CalendarPage";
 import {
   DashboardResponse,
   EventItem,
@@ -96,6 +97,7 @@ export function App() {
       {tab === "inbox" ? <InboxPage items={inbox} refresh={refresh} /> : null}
       {tab === "today" ? <TodayPage tasks={tasks} reminders={reminders} events={events} inbox={inbox} /> : null}
       {tab === "tasks" ? <TasksPage tasks={tasks} refresh={refresh} /> : null}
+      {tab === "calendar" ? <CalendarPage tasks={tasks} reminders={reminders} events={events} /> : null}
       {tab === "events" ? <EventsPage events={events} reminders={reminders} /> : null}
       {tab === "lists" ? <ListsPage lists={lists} /> : null}
       {tab === "notes" ? <NotesPage notes={notes} replyLater={replyLater} saved={saved} /> : null}

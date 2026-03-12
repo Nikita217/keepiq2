@@ -93,6 +93,23 @@ Inbox items now expose:
 - resolved object type
 - direct resolve actions
 
+### 7. Full task control in Mini App
+
+Tasks can now be managed directly in the app:
+- mark as done
+- reopen completed tasks
+- change deadline
+- clear deadline
+- delete task
+- filter between all tasks and only incomplete tasks
+
+### 8. Calendar view
+
+The Mini App now includes a calendar tab that combines:
+- tasks by due date or scheduled date
+- events by start date
+- reminders by reminder date
+
 ## Important files
 
 Core intake and AI routing:
@@ -107,12 +124,14 @@ Resolution and object creation:
 - `services/object_builder.py`
 - `repositories/incoming.py`
 - `api/routes/inbox.py`
+- `api/routes/tasks.py`
 
 Mini App:
 - `mini_app/src/api.ts`
 - `mini_app/src/types.ts`
 - `mini_app/src/pages/InboxPage.tsx`
 - `mini_app/src/pages/TasksPage.tsx`
+- `mini_app/src/pages/CalendarPage.tsx`
 
 ## Architecture summary
 

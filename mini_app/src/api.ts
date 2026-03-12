@@ -78,6 +78,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await response.text();
     throw new Error(buildErrorMessage(response, body));
   }
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }
 
@@ -93,4 +96,5 @@ export const api = {
   updateInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   resolveInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}/resolve`, { method: "POST", body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Record<string, unknown>) => request<TaskItem>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
 };
