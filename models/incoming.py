@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Uuid
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base, TimestampMixin
@@ -15,15 +15,23 @@ class IncomingItem(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    telegram_chat_id: Mapped[int | None] = mapped_column(index=True)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     telegram_message_id: Mapped[int | None] = mapped_column(index=True)
     telegram_update_id: Mapped[int | None] = mapped_column(index=True)
+    original_chat_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+    original_message_id: Mapped[int | None] = mapped_column(index=True)
     incoming_type: Mapped[str] = mapped_column(String(32), default=IncomingType.UNKNOWN.value, index=True)
     raw_text: Mapped[str | None] = mapped_column(Text)
+    extracted_text: Mapped[str | None] = mapped_column(Text)
     transcript_text: Mapped[str | None] = mapped_column(Text)
     ocr_text: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(Text)
+    original_caption: Mapped[str | None] = mapped_column(Text)
+    media_type: Mapped[str | None] = mapped_column(String(64))
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    parsed_entities_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    analysis_result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    linked_objects_json: Mapped[list] = mapped_column(JSON, default=list)
     parse_status: Mapped[str] = mapped_column(String(32), default=ParseStatus.NEW.value, index=True)
     confidence: Mapped[float | None] = mapped_column(Float)
     proposed_type: Mapped[str | None] = mapped_column(String(32))
@@ -110,3 +118,4 @@ class ObjectLink(Base, TimestampMixin):
     object_id: Mapped[str] = mapped_column(String(64), index=True)
 
     incoming_item = relationship("IncomingItem", back_populates="object_links")
+

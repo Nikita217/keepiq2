@@ -8,18 +8,24 @@ class StrEnum(str, Enum):
 
 
 class IncomingType(StrEnum):
-    TEXT = "text"
-    VOICE = "voice"
-    AUDIO = "audio"
+    PLAIN_TEXT = "plain_text"
+    TEXT = "plain_text"
+    VOICE_MESSAGE = "voice_message"
+    VOICE = "voice_message"
+    AUDIO = "voice_message"
     PHOTO = "photo"
     SCREENSHOT = "screenshot"
     DOCUMENT = "document"
-    FORWARDED = "forwarded"
+    FORWARDED_MESSAGE = "forwarded_message"
+    FORWARDED = "forwarded_message"
     LINK = "link"
     TICKET = "ticket"
-    BOOKING = "booking"
+    BOOKING_CONFIRMATION = "booking_confirmation"
+    BOOKING = "booking_confirmation"
     RECEIPT = "receipt"
-    IMAGE = "image"
+    IMAGE_WITH_TEXT = "image_with_text"
+    IMAGE = "image_with_text"
+    MIXED_MESSAGE = "mixed_message"
     UNKNOWN = "unknown"
 
 
@@ -39,7 +45,9 @@ class ObjectType(StrEnum):
     NOTE = "note"
     LIST = "list"
     REPLY_LATER = "reply_later"
-    SAVED = "saved"
+    SAVE_ONLY = "save_only"
+    SAVED = "save_only"
+    INBOX_REVIEW = "inbox_review"
 
 
 class TaskStatus(StrEnum):
@@ -79,3 +87,4 @@ class ImportanceLevel(StrEnum):
 class DigestKind(StrEnum):
     MORNING = "morning"
     EVENING = "evening"
+

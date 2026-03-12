@@ -10,13 +10,10 @@ from schemas.common import AttachmentRead, AuditEventRead, ParsedEntityRead
 
 class SuggestedActionRead(BaseModel):
     label: str
-    kind: str = "resolve"
+    action: str | None = None
     target_type: str | None = None
-    due_at: datetime | None = None
-    remind_at: datetime | None = None
-    event_at: datetime | None = None
-    title: str | None = None
-    response_text: str | None = None
+    scheduled_for: datetime | None = None
+    metadata: dict = Field(default_factory=dict)
 
 
 class IncomingItemRead(BaseModel):
@@ -53,3 +50,4 @@ class IncomingUpdateRequest(BaseModel):
     summary: str | None = None
     needs_confirmation: bool | None = None
     parse_status: str | None = None
+

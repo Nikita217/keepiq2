@@ -12,3 +12,4 @@ def build_ai_provider() -> AIProvider:
     if settings.openai_api_key:
         return OpenAIProvider()
     return HeuristicAIProvider()
+

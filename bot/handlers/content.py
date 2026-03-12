@@ -70,10 +70,10 @@ async def handle_voice(message: Message) -> None:
             chat_id=message.chat.id,
             message_id=message.message_id,
             update_id=None,
-            incoming_type=IncomingType.VOICE.value,
+            incoming_type=IncomingType.VOICE_MESSAGE.value,
             filename=f"voice-{voice.file_unique_id}.ogg",
             content=content,
-            content_type="voice",
+            content_type="audio/ogg",
             raw_text=message.caption,
             telegram_file_id=voice.file_id,
             telegram_unique_file_id=voice.file_unique_id,
@@ -97,10 +97,10 @@ async def handle_audio(message: Message) -> None:
             chat_id=message.chat.id,
             message_id=message.message_id,
             update_id=None,
-            incoming_type=IncomingType.AUDIO.value,
+            incoming_type=IncomingType.VOICE_MESSAGE.value,
             filename=audio.file_name or f"audio-{audio.file_unique_id}.mp3",
             content=content,
-            content_type="audio",
+            content_type=audio.mime_type or "audio/mpeg",
             raw_text=message.caption,
             telegram_file_id=audio.file_id,
             telegram_unique_file_id=audio.file_unique_id,
@@ -129,7 +129,7 @@ async def handle_photo(message: Message) -> None:
             incoming_type=incoming_type,
             filename=f"photo-{photo.file_unique_id}.jpg",
             content=content,
-            content_type="image",
+            content_type="image/jpeg",
             raw_text=message.caption,
             telegram_file_id=photo.file_id,
             telegram_unique_file_id=photo.file_unique_id,
@@ -148,7 +148,9 @@ async def handle_document(message: Message) -> None:
     content = file_bytes.read()
     lower_name = (document.file_name or "").lower()
     incoming_type = IncomingType.DOCUMENT.value
-    if any(keyword in lower_name for keyword in ["ticket", "билет", "booking", "бронь"]):
+    if any(keyword in lower_name for keyword in ["booking", "бронь", "reservation", "регистрац"]):
+        incoming_type = IncomingType.BOOKING_CONFIRMATION.value
+    elif any(keyword in lower_name for keyword in ["ticket", "билет"]):
         incoming_type = IncomingType.TICKET.value
     async with SessionLocal() as session:
         service = IngestionService(session, provider=provider, storage=storage)
@@ -160,7 +162,7 @@ async def handle_document(message: Message) -> None:
             incoming_type=incoming_type,
             filename=document.file_name or f"document-{document.file_unique_id}",
             content=content,
-            content_type=document.mime_type or "document",
+            content_type=document.mime_type or "application/octet-stream",
             raw_text=message.caption,
             telegram_file_id=document.file_id,
             telegram_unique_file_id=document.file_unique_id,
@@ -168,3 +170,4 @@ async def handle_document(message: Message) -> None:
             forwarded=bool(message.forward_origin),
         )
     await _reply_with_result(message, item)
+

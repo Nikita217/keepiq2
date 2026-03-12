@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     morning_digest_time: str = Field(default="09:00", alias="MORNING_DIGEST_TIME")
     evening_digest_enabled: bool = Field(default=True, alias="EVENING_DIGEST_ENABLED")
     evening_digest_time: str = Field(default="20:30", alias="EVENING_DIGEST_TIME")
+    ai_timeout_seconds: float = Field(default=20.0, alias="AI_TIMEOUT_SECONDS")
+    ai_max_retries: int = Field(default=2, alias="AI_MAX_RETRIES")
+    ai_high_confidence_threshold: float = Field(default=0.85, alias="AI_HIGH_CONFIDENCE_THRESHOLD")
+    ai_medium_confidence_threshold: float = Field(default=0.60, alias="AI_MEDIUM_CONFIDENCE_THRESHOLD")
+    ai_task_suggestion_hours: list[int] = Field(default_factory=lambda: [12, 15, 18], alias="AI_TASK_SUGGESTION_HOURS")
+    ai_date_only_event_suggestion_hours: list[int] = Field(
+        default_factory=lambda: [9, 14, 19], alias="AI_DATE_ONLY_EVENT_SUGGESTION_HOURS"
+    )
+    ai_reply_later_presets: list[str] = Field(
+        default_factory=lambda: ["today_evening", "tomorrow_morning", "next_monday_morning"],
+        alias="AI_REPLY_LATER_PRESETS",
+    )
 
     @property
     def is_postgres(self) -> bool:
@@ -64,3 +76,4 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.local_storage_root.mkdir(parents=True, exist_ok=True)
     return settings
+
