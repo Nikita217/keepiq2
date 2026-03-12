@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from aiogram.types import (
     InlineKeyboardButton,
@@ -11,12 +11,10 @@ from aiogram.types import (
 from bot.callbacks import InboxCallback
 
 
-
 def mini_app_keyboard(url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Open Mini App", web_app=WebAppInfo(url=url))]]
+        inline_keyboard=[[InlineKeyboardButton(text="Open KeepIQ", web_app=WebAppInfo(url=url))]]
     )
-
 
 
 def mini_app_reply_keyboard(url: str) -> ReplyKeyboardMarkup:
@@ -28,37 +26,36 @@ def mini_app_reply_keyboard(url: str) -> ReplyKeyboardMarkup:
     )
 
 
-
 def inbox_actions(item_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Подтвердить",
+                    text="РџРѕРґС‚РІРµСЂРґРёС‚СЊ",
                     callback_data=InboxCallback(action="confirm", item_id=item_id).pack(),
                 ),
                 InlineKeyboardButton(
-                    text="Нужно ответить",
+                    text="РќСѓР¶РЅРѕ РѕС‚РІРµС‚РёС‚СЊ",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="reply_later").pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="Как задачу",
+                    text="РљР°Рє Р·Р°РґР°С‡Сѓ",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="task").pack(),
                 ),
                 InlineKeyboardButton(
-                    text="Как заметку",
+                    text="РљР°Рє Р·Р°РјРµС‚РєСѓ",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="note").pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="Как список",
+                    text="РљР°Рє СЃРїРёСЃРѕРє",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="list").pack(),
                 ),
                 InlineKeyboardButton(
-                    text="Как событие",
+                    text="РљР°Рє СЃРѕР±С‹С‚РёРµ",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="event").pack(),
                 ),
             ],
