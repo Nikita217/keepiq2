@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from logging.config import fileConfig
 
@@ -10,10 +10,15 @@ from utils.settings import get_settings
 
 config = context.config
 settings = get_settings()
-config.set_main_option(
-    "sqlalchemy.url",
-    settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", ""),
-)
+
+def _migration_url(database_url: str) -> str:
+    if "+aiosqlite" in database_url:
+        return database_url.replace("+aiosqlite", "")
+    if "+asyncpg" in database_url:
+        return database_url.replace("+asyncpg", "+psycopg")
+    return database_url
+
+config.set_main_option("sqlalchemy.url", _migration_url(settings.database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
