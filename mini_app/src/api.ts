@@ -65,11 +65,12 @@ function buildErrorMessage(response: Response, body: string): string {
 }
 
 function buildNetworkErrorMessage(path: string, error: unknown): string {
+  const debug = getTelegramDebugState();
   const hint = isInsideTelegram()
     ? "Open the Mini App again from Telegram and make sure the backend allows requests from the Pages domain."
     : "Check VITE_API_URL and backend CORS settings for the current Pages domain.";
   const details = error instanceof Error && error.message ? error.message : "Network request failed";
-  return `Failed to fetch ${path}. ${hint} API=${API_URL}. Details: ${details}`;
+  return `Failed to fetch ${path}. ${hint} Debug: hasInitData=${debug.hasInitData}, host=${debug.locationHost}, api=${API_URL}. Details: ${details}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -107,3 +108,4 @@ export const api = {
   updateTask: (id: string, payload: Record<string, unknown>) => request<TaskItem>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
 };
+

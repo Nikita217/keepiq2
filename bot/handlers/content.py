@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import structlog
 from aiogram import F, Router
 from aiogram.types import Message
 
@@ -14,6 +15,7 @@ from storage.local import LocalStorageAdapter
 router = Router()
 provider = build_ai_provider()
 storage = LocalStorageAdapter()
+logger = structlog.get_logger(__name__)
 
 
 async def _ensure_user(message: Message):
@@ -40,134 +42,162 @@ async def _reply_with_result(message: Message, item) -> None:
     await message.answer("\n".join(lines), reply_markup=inbox_actions(str(item.id), suggested_actions))
 
 
+async def _reply_processing_error(message: Message, exc: Exception) -> None:
+    logger.exception(
+        "telegram_content_processing_failed",
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+        user_id=message.from_user.id if message.from_user else None,
+        content_type=message.content_type,
+        error=str(exc),
+    )
+    await message.answer(
+        "Не получилось обработать сообщение автоматически. Я не хочу его потерять, поэтому сначала проверь настройки Mini App/API и миграции базы, потом попробуй ещё раз."
+    )
+
+
 @router.message(F.text)
 async def handle_text(message: Message) -> None:
-    user = await _ensure_user(message)
-    async with SessionLocal() as session:
-        service = IngestionService(session, provider=provider, storage=storage)
-        item = await service.ingest_text(
-            user_id=user.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            update_id=None,
-            text=message.text,
-            forwarded=bool(message.forward_origin),
-        )
-    await _reply_with_result(message, item)
+    try:
+        user = await _ensure_user(message)
+        async with SessionLocal() as session:
+            service = IngestionService(session, provider=provider, storage=storage)
+            item = await service.ingest_text(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                update_id=None,
+                text=message.text,
+                forwarded=bool(message.forward_origin),
+            )
+        await _reply_with_result(message, item)
+    except Exception as exc:
+        await _reply_processing_error(message, exc)
 
 
 @router.message(F.voice)
 async def handle_voice(message: Message) -> None:
-    user = await _ensure_user(message)
-    voice = message.voice
-    file = await message.bot.get_file(voice.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
-    async with SessionLocal() as session:
-        service = IngestionService(session, provider=provider, storage=storage)
-        item = await service.ingest_file(
-            user_id=user.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            update_id=None,
-            incoming_type=IncomingType.VOICE_MESSAGE.value,
-            filename=f"voice-{voice.file_unique_id}.ogg",
-            content=content,
-            content_type="audio/ogg",
-            raw_text=message.caption,
-            telegram_file_id=voice.file_id,
-            telegram_unique_file_id=voice.file_unique_id,
-            metadata={"duration": voice.duration, "caption": message.caption},
-            forwarded=bool(message.forward_origin),
-        )
-    await _reply_with_result(message, item)
+    try:
+        user = await _ensure_user(message)
+        voice = message.voice
+        file = await message.bot.get_file(voice.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
+        async with SessionLocal() as session:
+            service = IngestionService(session, provider=provider, storage=storage)
+            item = await service.ingest_file(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                update_id=None,
+                incoming_type=IncomingType.VOICE_MESSAGE.value,
+                filename=f"voice-{voice.file_unique_id}.ogg",
+                content=content,
+                content_type="audio/ogg",
+                raw_text=message.caption,
+                telegram_file_id=voice.file_id,
+                telegram_unique_file_id=voice.file_unique_id,
+                metadata={"duration": voice.duration, "caption": message.caption},
+                forwarded=bool(message.forward_origin),
+            )
+        await _reply_with_result(message, item)
+    except Exception as exc:
+        await _reply_processing_error(message, exc)
 
 
 @router.message(F.audio)
 async def handle_audio(message: Message) -> None:
-    user = await _ensure_user(message)
-    audio = message.audio
-    file = await message.bot.get_file(audio.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
-    async with SessionLocal() as session:
-        service = IngestionService(session, provider=provider, storage=storage)
-        item = await service.ingest_file(
-            user_id=user.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            update_id=None,
-            incoming_type=IncomingType.VOICE_MESSAGE.value,
-            filename=audio.file_name or f"audio-{audio.file_unique_id}.mp3",
-            content=content,
-            content_type=audio.mime_type or "audio/mpeg",
-            raw_text=message.caption,
-            telegram_file_id=audio.file_id,
-            telegram_unique_file_id=audio.file_unique_id,
-            metadata={"duration": audio.duration, "title": audio.title, "caption": message.caption},
-            forwarded=bool(message.forward_origin),
-        )
-    await _reply_with_result(message, item)
+    try:
+        user = await _ensure_user(message)
+        audio = message.audio
+        file = await message.bot.get_file(audio.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
+        async with SessionLocal() as session:
+            service = IngestionService(session, provider=provider, storage=storage)
+            item = await service.ingest_file(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                update_id=None,
+                incoming_type=IncomingType.VOICE_MESSAGE.value,
+                filename=audio.file_name or f"audio-{audio.file_unique_id}.mp3",
+                content=content,
+                content_type=audio.mime_type or "audio/mpeg",
+                raw_text=message.caption,
+                telegram_file_id=audio.file_id,
+                telegram_unique_file_id=audio.file_unique_id,
+                metadata={"duration": audio.duration, "title": audio.title, "caption": message.caption},
+                forwarded=bool(message.forward_origin),
+            )
+        await _reply_with_result(message, item)
+    except Exception as exc:
+        await _reply_processing_error(message, exc)
 
 
 @router.message(F.photo)
 async def handle_photo(message: Message) -> None:
-    user = await _ensure_user(message)
-    photo = message.photo[-1]
-    file = await message.bot.get_file(photo.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
-    lower_caption = (message.caption or "").lower()
-    incoming_type = IncomingType.SCREENSHOT.value if "скрин" in lower_caption or "screenshot" in lower_caption else IncomingType.PHOTO.value
-    async with SessionLocal() as session:
-        service = IngestionService(session, provider=provider, storage=storage)
-        item = await service.ingest_file(
-            user_id=user.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            update_id=None,
-            incoming_type=incoming_type,
-            filename=f"photo-{photo.file_unique_id}.jpg",
-            content=content,
-            content_type="image/jpeg",
-            raw_text=message.caption,
-            telegram_file_id=photo.file_id,
-            telegram_unique_file_id=photo.file_unique_id,
-            metadata={"caption": message.caption},
-            forwarded=bool(message.forward_origin),
-        )
-    await _reply_with_result(message, item)
+    try:
+        user = await _ensure_user(message)
+        photo = message.photo[-1]
+        file = await message.bot.get_file(photo.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
+        lower_caption = (message.caption or "").lower()
+        incoming_type = IncomingType.SCREENSHOT.value if "скрин" in lower_caption or "screenshot" in lower_caption else IncomingType.PHOTO.value
+        async with SessionLocal() as session:
+            service = IngestionService(session, provider=provider, storage=storage)
+            item = await service.ingest_file(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                update_id=None,
+                incoming_type=incoming_type,
+                filename=f"photo-{photo.file_unique_id}.jpg",
+                content=content,
+                content_type="image/jpeg",
+                raw_text=message.caption,
+                telegram_file_id=photo.file_id,
+                telegram_unique_file_id=photo.file_unique_id,
+                metadata={"caption": message.caption},
+                forwarded=bool(message.forward_origin),
+            )
+        await _reply_with_result(message, item)
+    except Exception as exc:
+        await _reply_processing_error(message, exc)
 
 
 @router.message(F.document)
 async def handle_document(message: Message) -> None:
-    user = await _ensure_user(message)
-    document = message.document
-    file = await message.bot.get_file(document.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
-    lower_name = (document.file_name or "").lower()
-    incoming_type = IncomingType.DOCUMENT.value
-    if any(keyword in lower_name for keyword in ["booking", "бронь", "reservation", "регистрац"]):
-        incoming_type = IncomingType.BOOKING_CONFIRMATION.value
-    elif any(keyword in lower_name for keyword in ["ticket", "билет"]):
-        incoming_type = IncomingType.TICKET.value
-    async with SessionLocal() as session:
-        service = IngestionService(session, provider=provider, storage=storage)
-        item = await service.ingest_file(
-            user_id=user.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            update_id=None,
-            incoming_type=incoming_type,
-            filename=document.file_name or f"document-{document.file_unique_id}",
-            content=content,
-            content_type=document.mime_type or "application/octet-stream",
-            raw_text=message.caption,
-            telegram_file_id=document.file_id,
-            telegram_unique_file_id=document.file_unique_id,
-            metadata={"caption": message.caption, "mime_type": document.mime_type},
-            forwarded=bool(message.forward_origin),
-        )
-    await _reply_with_result(message, item)
-
+    try:
+        user = await _ensure_user(message)
+        document = message.document
+        file = await message.bot.get_file(document.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
+        lower_name = (document.file_name or "").lower()
+        incoming_type = IncomingType.DOCUMENT.value
+        if any(keyword in lower_name for keyword in ["booking", "бронь", "reservation", "регистрац"]):
+            incoming_type = IncomingType.BOOKING_CONFIRMATION.value
+        elif any(keyword in lower_name for keyword in ["ticket", "билет"]):
+            incoming_type = IncomingType.TICKET.value
+        async with SessionLocal() as session:
+            service = IngestionService(session, provider=provider, storage=storage)
+            item = await service.ingest_file(
+                user_id=user.id,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                update_id=None,
+                incoming_type=incoming_type,
+                filename=document.file_name or f"document-{document.file_unique_id}",
+                content=content,
+                content_type=document.mime_type or "application/octet-stream",
+                raw_text=message.caption,
+                telegram_file_id=document.file_id,
+                telegram_unique_file_id=document.file_unique_id,
+                metadata={"caption": message.caption, "mime_type": document.mime_type},
+                forwarded=bool(message.forward_origin),
+            )
+        await _reply_with_result(message, item)
+    except Exception as exc:
+        await _reply_processing_error(message, exc)
