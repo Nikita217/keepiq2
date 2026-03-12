@@ -14,18 +14,36 @@ import { getInitData, getTelegramUserId, isInsideTelegram } from "./telegram";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-function buildHeaders(): HeadersInit {
+function buildHeaders(path: string, init?: RequestInit): HeadersInit {
+  const headers: Record<string, string> = {};
+  const providedHeaders = new Headers(init?.headers ?? {});
+
+  providedHeaders.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  const hasBody = init?.body !== undefined && init?.body !== null;
+  if (hasBody && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const initData = getInitData();
   if (initData) {
-    return { "X-Telegram-Init-Data": initData };
+    headers["X-Telegram-Init-Data"] = initData;
+    return headers;
   }
 
   const telegramUserId = getTelegramUserId();
   if (telegramUserId) {
-    return { "X-Telegram-User-Id": String(telegramUserId) };
+    headers["X-Telegram-User-Id"] = String(telegramUserId);
+    return headers;
   }
 
-  return { "X-Telegram-User-Id": "1" };
+  if (!isInsideTelegram()) {
+    headers["X-Telegram-User-Id"] = "1";
+  }
+
+  return headers;
 }
 
 function buildErrorMessage(response: Response, body: string): string {
@@ -37,15 +55,25 @@ function buildErrorMessage(response: Response, body: string): string {
   return `API error ${response.status}: ${body || response.statusText}`;
 }
 
+function buildNetworkErrorMessage(path: string, error: unknown): string {
+  const hint = isInsideTelegram()
+    ? "Open the Mini App again from Telegram and make sure the backend allows requests from the Pages domain."
+    : "Check VITE_API_URL and backend CORS settings for the current Pages domain.";
+  const details = error instanceof Error && error.message ? error.message : "Network request failed";
+  return `Failed to fetch ${path}. ${hint} Details: ${details}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...buildHeaders(),
-      ...(init?.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: buildHeaders(path, init),
+    });
+  } catch (error) {
+    throw new Error(buildNetworkErrorMessage(path, error));
+  }
+
   if (!response.ok) {
     const body = await response.text();
     throw new Error(buildErrorMessage(response, body));

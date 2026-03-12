@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith("postgresql") or self.database_url.startswith("postgresql+")
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        origins: list[str] = []
+        for candidate in (self.mini_app_dev_url, self.mini_app_public_url):
+            normalized = candidate.strip().rstrip("/")
+            if normalized and normalized not in origins:
+                origins.append(normalized)
+        return origins
 
 
 @lru_cache(maxsize=1)
