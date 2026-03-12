@@ -17,16 +17,20 @@
   }
 }
 
+function getWebApp() {
+  return window.Telegram?.WebApp ?? null;
+}
+
 export function getInitData(): string | null {
-  return window.Telegram?.WebApp?.initData ?? null;
+  return getWebApp()?.initData ?? null;
 }
 
 export function getTelegramUserId(): number | null {
-  return window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? null;
+  return getWebApp()?.initDataUnsafe?.user?.id ?? null;
 }
 
 export function isInsideTelegram(): boolean {
-  return Boolean(window.Telegram?.WebApp);
+  return Boolean(getWebApp());
 }
 
 export function isLocalDevHost(): boolean {
@@ -34,6 +38,30 @@ export function isLocalDevHost(): boolean {
 }
 
 export function prepareTelegramWebApp(): void {
-  window.Telegram?.WebApp?.ready?.();
-  window.Telegram?.WebApp?.expand?.();
+  getWebApp()?.ready?.();
+  getWebApp()?.expand?.();
+}
+
+export async function waitForTelegramInitData(timeoutMs = 2500): Promise<string | null> {
+  if (!isInsideTelegram()) {
+    return getInitData();
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let initData = getInitData();
+  while (!initData && Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    initData = getInitData();
+  }
+  return initData;
+}
+
+export function getTelegramDebugState() {
+  return {
+    insideTelegram: isInsideTelegram(),
+    hasInitData: Boolean(getInitData()),
+    telegramUserId: getTelegramUserId(),
+    locationHost: window.location.host,
+    locationHref: window.location.href,
+  };
 }

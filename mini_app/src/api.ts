@@ -10,11 +10,18 @@
   SearchResult,
   TaskItem,
 } from "./types";
-import { getInitData, getTelegramUserId, isInsideTelegram, isLocalDevHost } from "./telegram";
+import {
+  getInitData,
+  getTelegramDebugState,
+  getTelegramUserId,
+  isInsideTelegram,
+  isLocalDevHost,
+  waitForTelegramInitData,
+} from "./telegram";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-function buildHeaders(init?: RequestInit): HeadersInit {
+async function buildHeaders(init?: RequestInit): Promise<HeadersInit> {
   const headers: Record<string, string> = {};
   const providedHeaders = new Headers(init?.headers ?? {});
 
@@ -27,7 +34,8 @@ function buildHeaders(init?: RequestInit): HeadersInit {
     headers["Content-Type"] = "application/json";
   }
 
-  const initData = getInitData();
+  const immediateInitData = getInitData();
+  const initData = immediateInitData || (await waitForTelegramInitData());
   if (initData) {
     headers["X-Telegram-Init-Data"] = initData;
     return headers;
@@ -48,9 +56,10 @@ function buildHeaders(init?: RequestInit): HeadersInit {
 
 function buildErrorMessage(response: Response, body: string): string {
   if (response.status === 401) {
+    const debug = getTelegramDebugState();
     return isInsideTelegram()
-      ? "Mini App did not pass Telegram authentication. Reopen it from the bot menu or /start button."
-      : "This session is not authenticated. Open the app from Telegram. Local fallback works only on localhost.";
+      ? `Mini App did not pass Telegram authentication. Reopen it from the bot menu or /start button. Debug: hasInitData=${debug.hasInitData}, api=${API_URL}, host=${debug.locationHost}`
+      : `This session is not authenticated. Open the app from Telegram. Local fallback works only on localhost. API=${API_URL}`;
   }
   return `API error ${response.status}: ${body || response.statusText}`;
 }
@@ -60,7 +69,7 @@ function buildNetworkErrorMessage(path: string, error: unknown): string {
     ? "Open the Mini App again from Telegram and make sure the backend allows requests from the Pages domain."
     : "Check VITE_API_URL and backend CORS settings for the current Pages domain.";
   const details = error instanceof Error && error.message ? error.message : "Network request failed";
-  return `Failed to fetch ${path}. ${hint} Details: ${details}`;
+  return `Failed to fetch ${path}. ${hint} API=${API_URL}. Details: ${details}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -68,7 +77,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: buildHeaders(init),
+      headers: await buildHeaders(init),
     });
   } catch (error) {
     throw new Error(buildNetworkErrorMessage(path, error));
