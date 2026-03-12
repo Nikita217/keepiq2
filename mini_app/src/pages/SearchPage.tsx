@@ -6,7 +6,7 @@ export function SearchPage({ query, onQueryChange, results }: { query: string; o
   return (
     <div className="stack">
       <FilterBar query={query} onChange={onQueryChange} />
-      <Card title="Results" meta="full-text + entities + inbox content">
+      <Card title="Результаты" meta="поиск по объектам, сущностям и входящим">
         <ul className="listClean">
           {results.map((result) => <li key={`${result.object_type}-${result.object_id}`}>{result.title} • {result.object_type} {result.snippet ? `• ${result.snippet}` : ""}</li>)}
         </ul>

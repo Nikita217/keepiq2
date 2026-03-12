@@ -64,7 +64,7 @@ export function App() {
       setSaved(notesData.saved);
       setLastSyncAt(new Date().toLocaleTimeString());
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Unknown error");
+      setError(refreshError instanceof Error ? refreshError.message : "Неизвестная ошибка");
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +81,7 @@ export function App() {
     }
     const timeout = setTimeout(() => {
       api.search(searchQuery).then((response) => setSearchResults(response.items)).catch((searchError) => {
-        setError(searchError instanceof Error ? searchError.message : "Search failed");
+        setError(searchError instanceof Error ? searchError.message : "Ошибка поиска");
       });
     }, 250);
     return () => clearTimeout(timeout);
@@ -89,10 +89,10 @@ export function App() {
 
   return (
     <main className="shell">
-      <NavBar active={tab} onChange={setTab} aside={<button className="ghost" onClick={() => refresh()}>Refresh</button>} />
+      <NavBar active={tab} onChange={setTab} aside={<button className="ghost" onClick={() => refresh()}>Обновить</button>} />
       {error ? <section className="errorBanner">{error}</section> : null}
-      {lastSyncAt ? <p className="syncHint">Last sync: {lastSyncAt}</p> : null}
-      {isLoading && !dashboard ? <div className="empty">Loading KeepIQ...</div> : null}
+      {lastSyncAt ? <p className="syncHint">Последняя синхронизация: {lastSyncAt}</p> : null}
+      {isLoading && !dashboard ? <div className="empty">Загружаю KeepIQ…</div> : null}
       {tab === "dashboard" ? <DashboardPage data={dashboard} /> : null}
       {tab === "inbox" ? <InboxPage items={inbox} refresh={refresh} /> : null}
       {tab === "today" ? <TodayPage tasks={tasks} reminders={reminders} events={events} inbox={inbox} /> : null}

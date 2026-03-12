@@ -5,20 +5,20 @@ export function DashboardPage({ data }: { data: DashboardResponse | null }) {
   if (!data) return <div className="empty">Загрузка обзора…</div>;
   return (
     <div className="pageGrid">
-      <Card title="Сегодня" meta="что сейчас происходит">
+      <Card title="Сегодня" meta="что сейчас в фокусе">
         <div className="metricRow">
-          <div><strong>{data.today.tasks}</strong><span>tasks</span></div>
-          <div><strong>{data.today.reminders}</strong><span>reminders</span></div>
-          <div><strong>{data.today.events}</strong><span>events</span></div>
+          <div><strong>{data.today.tasks}</strong><span>задач</span></div>
+          <div><strong>{data.today.reminders}</strong><span>напоминаний</span></div>
+          <div><strong>{data.today.events}</strong><span>событий</span></div>
         </div>
       </Card>
-      <Card title="Счётчики" meta="порядок без бюрократии">
+      <Card title="Сводка" meta="порядок без бюрократии">
         <ul className="listClean">
-          <li>Inbox: {data.counters.inbox}</li>
-          <li>Overdue: {data.counters.overdue}</li>
-          <li>Reply later: {data.counters.reply_later}</li>
-          <li>Notes: {data.counters.notes}</li>
-          <li>Lists: {data.counters.lists}</li>
+          <li>Входящих на разборе: {data.counters.inbox}</li>
+          <li>Просрочено: {data.counters.overdue}</li>
+          <li>Нужно ответить позже: {data.counters.reply_later}</li>
+          <li>Заметок: {data.counters.notes}</li>
+          <li>Списков: {data.counters.lists}</li>
         </ul>
       </Card>
       <Card title="Скоро" meta="ближайшие события">
@@ -28,7 +28,7 @@ export function DashboardPage({ data }: { data: DashboardResponse | null }) {
       </Card>
       <Card title="Ждут разбора" meta="ничего не потеряется">
         <ul className="listClean">
-          {data.pending_inbox.map((item) => <li key={item.id}>{item.summary ?? "Без summary"} • {item.proposed_type ?? "unknown"}</li>)}
+          {data.pending_inbox.map((item) => <li key={item.id}>{item.summary ?? "Без описания"} • {item.proposed_type ?? "не определено"}</li>)}
         </ul>
       </Card>
     </div>

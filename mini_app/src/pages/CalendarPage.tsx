@@ -11,6 +11,12 @@ type AgendaEntry = {
   at: string | null;
 };
 
+const KIND_LABELS: Record<AgendaEntry["kind"], string> = {
+  task: "задача",
+  event: "событие",
+  reminder: "напоминание",
+};
+
 function dateKeyFromValue(value: string | null): string | null {
   if (!value) {
     return null;
@@ -114,14 +120,14 @@ export function CalendarPage({ tasks, events, reminders }: { tasks: TaskItem[]; 
 
   return (
     <div className="pageGrid calendarLayout">
-      <Card title="Calendar" meta={monthCursor.toLocaleString(undefined, { month: "long", year: "numeric" })}>
+      <Card title="Календарь" meta={monthCursor.toLocaleString(undefined, { month: "long", year: "numeric" })}>
         <div className="toolbarRow">
           <div className="segmentedRow">
             <button className="ghost" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}>← Месяц</button>
             <button className="ghost" onClick={() => setMonthCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>Сегодня</button>
             <button className="ghost" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}>Месяц →</button>
           </div>
-          <p className="syncHint">Календарь собирается из задач, событий и напоминаний.</p>
+          <p className="syncHint">Здесь собраны задачи, события и напоминания по датам.</p>
         </div>
         <div className="calendarWeekdays">
           {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label) => <span key={label}>{label}</span>)}
@@ -141,7 +147,7 @@ export function CalendarPage({ tasks, events, reminders }: { tasks: TaskItem[]; 
               >
                 <strong>{day.getDate()}</strong>
                 <div className="calendarBadges">
-                  {items.slice(0, 3).map((item) => <span key={`${item.kind}-${item.id}`} className={`calendarBadge badge-${item.kind}`}>{item.kind}</span>)}
+                  {items.slice(0, 3).map((item) => <span key={`${item.kind}-${item.id}`} className={`calendarBadge badge-${item.kind}`}>{KIND_LABELS[item.kind]}</span>)}
                 </div>
               </button>
             );
@@ -149,13 +155,13 @@ export function CalendarPage({ tasks, events, reminders }: { tasks: TaskItem[]; 
         </div>
       </Card>
 
-      <Card title="Agenda" meta={new Date(selectedDate).toLocaleDateString()}>
+      <Card title="План на день" meta={new Date(selectedDate).toLocaleDateString()}>
         <ul className="listClean">
           {selectedItems.length ? selectedItems.map((item) => (
             <li key={`${item.kind}-${item.id}`}>
               <strong>{item.title}</strong>
               <div className="pillRow">
-                <span className="pill">{item.kind}</span>
+                <span className="pill">{KIND_LABELS[item.kind]}</span>
                 <span className="pill">{item.status}</span>
                 {item.at ? <span className="pill">{new Date(item.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : null}
               </div>

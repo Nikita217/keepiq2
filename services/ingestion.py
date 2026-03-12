@@ -164,6 +164,7 @@ class IngestionService:
                 "assistant_response": payload.assistant_response,
                 "clarification_question": payload.clarification_question,
                 "analysis_provider": payload.provider,
+                "suggested_actions": [action.model_dump(mode="json") for action in payload.suggested_actions],
             }
         )
         item.metadata_json = metadata_json
@@ -178,7 +179,7 @@ class IngestionService:
                 incoming_item_id=item.id,
                 provider=payload.provider,
                 model=payload.model,
-                prompt_version="v2",
+                prompt_version="v3",
                 summary=payload.summary,
                 proposed_type=payload.proposed_type,
                 confidence=payload.confidence,

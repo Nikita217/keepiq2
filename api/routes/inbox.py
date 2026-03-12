@@ -9,7 +9,7 @@ from api.dependencies import get_current_user, get_db_session
 from models import IncomingItem
 from models.enums import ParseStatus
 from repositories.incoming import IncomingRepository
-from schemas.incoming import InboxActionRequest, IncomingItemRead, IncomingUpdateRequest
+from schemas.incoming import InboxActionRequest, IncomingItemRead, IncomingUpdateRequest, SuggestedActionRead
 from services.inbox_actions import InboxActionService
 
 router = APIRouter(prefix="/inbox", tags=["inbox"])
@@ -36,6 +36,7 @@ async def resolve_inbox_item(
             target_type=payload.target_type,
             title=payload.title,
             force_confirmation=payload.force_confirmation,
+            suggested_action_id=payload.suggested_action_id,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -67,6 +68,7 @@ async def update_inbox_item(
 
 def _to_read_model(item: IncomingItem) -> IncomingItemRead:
     metadata = item.metadata_json or {}
+    suggested_actions = [SuggestedActionRead(**action) for action in metadata.get("suggested_actions", [])]
     return IncomingItemRead(
         id=item.id,
         incoming_type=item.incoming_type,
@@ -82,6 +84,7 @@ def _to_read_model(item: IncomingItem) -> IncomingItemRead:
         assistant_response=metadata.get("assistant_response"),
         clarification_question=metadata.get("clarification_question"),
         resolved_object_type=metadata.get("resolved_object_type"),
+        suggested_actions=suggested_actions,
         created_at=item.created_at,
         attachments=item.attachments,
         entities=item.entities,

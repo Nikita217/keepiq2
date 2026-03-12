@@ -24,6 +24,17 @@ class CandidateObject(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class SuggestedAction(BaseModel):
+    label: str
+    kind: str = "resolve"
+    target_type: str | None = None
+    due_at: datetime | None = None
+    remind_at: datetime | None = None
+    event_at: datetime | None = None
+    title: str | None = None
+    response_text: str | None = None
+
+
 class AnalysisPayload(BaseModel):
     provider: str
     model: str | None = None
@@ -36,4 +47,5 @@ class AnalysisPayload(BaseModel):
     draft_replies: dict[str, str] = Field(default_factory=dict)
     assistant_response: str | None = None
     clarification_question: str | None = None
+    suggested_actions: list[SuggestedAction] = Field(default_factory=list)
     raw: dict = Field(default_factory=dict)

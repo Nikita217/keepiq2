@@ -3,22 +3,22 @@
 export type TabKey = "dashboard" | "inbox" | "today" | "tasks" | "calendar" | "events" | "lists" | "notes" | "search";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: "dashboard", label: "Home" },
-  { key: "inbox", label: "Inbox" },
-  { key: "today", label: "Today" },
-  { key: "tasks", label: "Tasks" },
-  { key: "calendar", label: "Calendar" },
-  { key: "events", label: "Time" },
-  { key: "lists", label: "Lists" },
-  { key: "notes", label: "Notes" },
-  { key: "search", label: "Search" },
+  { key: "dashboard", label: "Главная" },
+  { key: "inbox", label: "Входящие" },
+  { key: "today", label: "Сегодня" },
+  { key: "tasks", label: "Задачи" },
+  { key: "calendar", label: "Календарь" },
+  { key: "events", label: "События" },
+  { key: "lists", label: "Списки" },
+  { key: "notes", label: "Заметки" },
+  { key: "search", label: "Поиск" },
 ];
 
 export function NavBar({ active, onChange, aside }: { active: TabKey; onChange: (tab: TabKey) => void; aside?: ReactNode }) {
   return (
     <header className="topbar">
       <div>
-        <p className="eyebrow">Personal AI inbox</p>
+        <p className="eyebrow">Личный AI-задачник</p>
         <h1>KeepIQ</h1>
       </div>
       <div className="topbarAside">{aside}</div>

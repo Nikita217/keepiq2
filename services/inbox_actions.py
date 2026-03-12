@@ -1,11 +1,12 @@
 ﻿from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from models import IncomingItem, ProcessingLog
 from models.enums import ParseStatus
 from repositories.incoming import IncomingRepository
-from schemas.ai import AnalysisPayload, CandidateObject
+from schemas.ai import AnalysisPayload, CandidateObject, SuggestedAction
 from services.object_builder import ObjectBuilderService
 from utils.text import compact_text, split_lines_to_items
 
@@ -24,6 +25,7 @@ class InboxActionService:
         target_type: str | None = None,
         title: str | None = None,
         force_confirmation: bool = False,
+        suggested_action_id: int | None = None,
     ) -> IncomingItem:
         item = await self.repo.get(item_id)
         if item is None:
@@ -32,7 +34,12 @@ class InboxActionService:
             raise PermissionError("item does not belong to user")
 
         payload = await self._payload_for_item(item)
-        if target_type:
+        chosen_action: SuggestedAction | None = None
+
+        if suggested_action_id is not None and 0 <= suggested_action_id < len(payload.suggested_actions):
+            chosen_action = payload.suggested_actions[suggested_action_id]
+            payload = self._apply_suggested_action(item, payload, chosen_action)
+        elif target_type:
             payload = self._coerce_payload(item, payload, target_type, title)
         elif title and payload.candidates:
             payload.candidates[0].title = title
@@ -55,6 +62,8 @@ class InboxActionService:
                 "assistant_response": payload.assistant_response,
                 "clarification_question": payload.clarification_question,
                 "resolved_object_type": target_type or payload.proposed_type,
+                "suggested_actions": [action.model_dump(mode="json") for action in payload.suggested_actions],
+                "last_selected_action": chosen_action.label if chosen_action else None,
             }
         )
         item.metadata_json = metadata
@@ -79,6 +88,48 @@ class InboxActionService:
                 pass
         fallback_type = item.proposed_type or "note"
         return self._coerce_payload(item, None, fallback_type, None)
+
+    def _apply_suggested_action(
+        self,
+        item: IncomingItem,
+        payload: AnalysisPayload,
+        action: SuggestedAction,
+    ) -> AnalysisPayload:
+        if action.target_type and action.target_type != payload.proposed_type:
+            payload = self._coerce_payload(item, payload, action.target_type, action.title)
+        elif action.title and payload.candidates:
+            payload.candidates[0].title = action.title
+            payload.summary = action.title
+
+        for candidate in payload.candidates:
+            if action.target_type == "task" or candidate.object_type == "task":
+                if action.due_at is not None:
+                    candidate.due_at = action.due_at
+            if action.target_type == "reminder" or candidate.object_type == "reminder":
+                if action.remind_at is not None:
+                    candidate.remind_at = action.remind_at
+                elif action.due_at is not None and candidate.object_type == "reminder":
+                    candidate.remind_at = action.due_at
+            if action.target_type == "event" or candidate.object_type == "event":
+                if action.event_at is not None:
+                    candidate.event_at = action.event_at
+            if action.target_type == "reply_later" or candidate.object_type == "reply_later":
+                if action.due_at is not None:
+                    candidate.due_at = action.due_at
+
+        if action.remind_at is not None:
+            for candidate in payload.candidates:
+                if candidate.object_type == "task" and candidate.metadata.get("linked_to") == "reminder":
+                    candidate.due_at = action.remind_at
+        if action.event_at is not None:
+            for candidate in payload.candidates:
+                if candidate.object_type == "reminder" and candidate.metadata.get("linked_to") == "event":
+                    candidate.remind_at = action.event_at
+
+        payload.needs_confirmation = False
+        if action.response_text:
+            payload.assistant_response = action.response_text
+        return payload
 
     def _coerce_payload(
         self,
@@ -117,8 +168,6 @@ class InboxActionService:
             metadata=metadata,
         )
         if first_dt:
-            from datetime import datetime
-
             parsed_dt = datetime.fromisoformat(first_dt)
             if target_type == "task":
                 candidate.due_at = parsed_dt
@@ -145,5 +194,6 @@ class InboxActionService:
             draft_replies={},
             assistant_response=assistant_response,
             clarification_question=None,
+            suggested_actions=[],
             raw={"manual": True},
         )

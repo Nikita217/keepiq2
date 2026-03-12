@@ -21,8 +21,21 @@ async def confirm_inbox_item(callback: CallbackQuery, callback_data: InboxCallba
         except LookupError:
             await callback.answer("Объект не найден", show_alert=True)
             return
-    resolved_type = item.metadata_json.get("resolved_object_type") if item.metadata_json else item.proposed_type
-    await callback.answer(f"Подтверждено как {resolved_type}")
+    await callback.answer((item.metadata_json or {}).get("last_selected_action") or "Сохранено")
+
+
+@router.callback_query(InboxCallback.filter(F.action == "suggest"))
+async def apply_suggested_action(callback: CallbackQuery, callback_data: InboxCallback) -> None:
+    async with SessionLocal() as session:
+        try:
+            item = await InboxActionService(session).resolve(
+                item_id=UUID(callback_data.item_id),
+                suggested_action_id=int(callback_data.value or "0"),
+            )
+        except LookupError:
+            await callback.answer("Объект не найден", show_alert=True)
+            return
+    await callback.answer((item.metadata_json or {}).get("last_selected_action") or "Готово")
 
 
 @router.callback_query(InboxCallback.filter(F.action == "save_as"))

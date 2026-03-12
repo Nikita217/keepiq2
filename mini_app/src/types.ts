@@ -5,6 +5,17 @@
   pending_inbox: Array<{ id: string; summary: string | null; proposed_type: string | null; confidence: number | null }>;
 };
 
+export type SuggestedAction = {
+  label: string;
+  kind: string;
+  target_type: string | null;
+  due_at: string | null;
+  remind_at: string | null;
+  event_at: string | null;
+  title: string | null;
+  response_text: string | null;
+};
+
 export type IncomingItem = {
   id: string;
   incoming_type: string;
@@ -20,6 +31,7 @@ export type IncomingItem = {
   assistant_response: string | null;
   clarification_question: string | null;
   resolved_object_type: string | null;
+  suggested_actions: SuggestedAction[];
   created_at: string;
   entities: Array<{ entity_type: string; value: string; confidence: number | null }>;
 };

@@ -29,30 +29,15 @@ async def _ensure_user(message: Message):
 
 async def _reply_with_result(message: Message, item) -> None:
     metadata = item.metadata_json or {}
-    assistant_response = metadata.get("assistant_response")
+    assistant_response = metadata.get("assistant_response") or item.summary or "Я обработал это сообщение."
     clarification_question = metadata.get("clarification_question")
-    summary = item.summary or item.raw_text or item.transcript_text or item.ocr_text or "Сохранено"
+    suggested_actions = metadata.get("suggested_actions", [])
 
-    if item.proposed_type == "answer" and assistant_response:
-        lines = [
-            "AI распознал вопрос и подготовил ответ.",
-            "",
-            assistant_response[:1200],
-        ]
-        if clarification_question:
-            lines.extend(["", f"Если нужно, уточните: {clarification_question}"])
-    else:
-        lines = [
-            "Входящее сохранено.",
-            f"Тип: {item.proposed_type or 'unknown'}",
-            f"Уверенность: {round((item.confidence or 0) * 100)}%",
-            f"Кратко: {summary[:220]}",
-        ]
-        if clarification_question:
-            lines.append(f"Уточнение: {clarification_question}")
-        if not item.needs_confirmation:
-            lines.append("Решение применено автоматически. При необходимости можно переопределить тип ниже.")
-    await message.answer("\n".join(lines), reply_markup=inbox_actions(str(item.id), item.proposed_type or "note"))
+    lines = [assistant_response[:1200]]
+    if clarification_question:
+        lines.extend(["", clarification_question])
+
+    await message.answer("\n".join(lines), reply_markup=inbox_actions(str(item.id), suggested_actions))
 
 
 @router.message(F.text)

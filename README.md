@@ -2,30 +2,30 @@
 
 KeepIQ is a Telegram bot + Mini App for AI-first inbox capture.
 
-The main product idea is simple: send anything to the bot, let AI understand what it is, then either answer immediately or route it into the right object with minimal manual correction.
+The product goal is simple: send anything to the bot, let AI understand what it is, and then either answer immediately or offer the next best actions in a human way.
 
 ## What the bot accepts
 
-- Text messages
-- Links
-- Forwarded messages
-- Voice messages
-- Audio files
-- Photos and screenshots
-- Documents
+- text messages
+- links
+- forwarded messages
+- voice messages
+- audio files
+- photos and screenshots
+- documents
 
-## Current AI triage flow
+## Current intake logic
 
 1. KeepIQ stores the original incoming item first.
 2. It builds a unified context for analysis:
    - incoming type
    - filename
    - mime type
-   - caption/user text
+   - caption / user text
    - transcript for audio
    - extracted text for plain-text documents
    - forwarded flag
-3. AI decides what the item is:
+3. AI decides what the item actually is:
    - `task`
    - `reminder`
    - `event`
@@ -34,66 +34,86 @@ The main product idea is simple: send anything to the bot, let AI understand wha
    - `reply_later`
    - `saved`
    - `answer`
-4. If confidence is high and confirmation is not needed, KeepIQ materializes the result automatically.
-5. If the item is ambiguous, it stays in Inbox with AI explanation, clarification question, and override actions.
+4. Instead of generic buttons, the bot now prepares adaptive next-step actions.
+5. The user chooses from those actions, and KeepIQ materializes or updates the correct object.
 
-## Implemented behavior in this version
+## What changed in this version
 
-### 1. AI-first routing
+### 1. AI now thinks in next steps, not just labels
 
-The bot now analyzes all available context, not just the raw text.
+The assistant now returns:
+- natural Russian response text for the user
+- detected object type
+- extracted candidates
+- adaptive suggested actions
 
 Examples:
-- A screenshot of a chat can be classified as `reply_later`, `note`, `task`, or `answer`.
-- A concert ticket can become `event` plus linked `reminder`.
-- A voice note with several action items can become multiple tasks.
-- A direct user question can be classified as `answer` and the bot can reply immediately.
+- `купить шапку` is treated as a task, not as a generic unknown item
+- `напомни завтра позвонить Ване` becomes a reminder flow with concrete time suggestions
+- a screenshot of a chat can become `reply_later`, `task`, `note`, or `answer`
+- a direct question can be answered immediately as `answer`
 
-### 2. Better confirmation flow
+### 2. Adaptive action buttons
 
-Telegram and Mini App confirmations now resolve the item, not just flip a review flag.
+Telegram buttons are no longer generic by default.
 
-That means:
-- `Confirm` now finalizes the AI decision.
-- `Save as task/note/list/event/reply_later` reuses the same source item.
-- Re-confirming an already materialized item updates linked objects instead of creating duplicates.
+Instead, AI suggests actions that match the detected intent.
 
-### 3. Linked object creation
+Examples:
+- for a plain task without a date:
+  - `Добавить задачу`
+  - `Сегодня к 19:00`
+  - `Завтра в 09:00`
+  - `В ближайший понедельник`
+- for a reminder without an exact time:
+  - `Поставить напоминание`
+  - `В 09:00`
+  - `В 14:00`
+  - `В 19:00`
+- for a ticket:
+  - `Сохранить событие`
+  - time-aware options when needed
 
-The object builder now keeps related entities connected:
-- reminder text can create both a task and a linked reminder
-- ticket/event parsing can create an event and a linked reminder
-- `remind_on` is filled from `remind_at`
+### 3. Human-style bot replies
 
-### 4. Answer mode
+The Telegram reply now avoids internal wording such as:
+- confidence percentage
+- "incoming saved"
+- generic type override buttons
 
-If AI decides the incoming item is primarily a question, it can return `answer`.
+Instead the bot answers in plain Russian, for example:
+- "Похоже, это задача…"
+- "Похоже, это напоминание…"
+- "Похоже, здесь нужен ответ…"
 
-In this case KeepIQ:
-- stores the incoming item
-- saves the AI answer in item metadata
-- replies to the user directly
-- still allows manual re-routing if the user wants to save it as a note or task
+### 4. Better reasoning model support
 
-### 5. Better file context handling
+The project now supports reasoning effort for newer OpenAI models.
 
-For files, the bot now includes:
-- caption text
-- file name
-- mime type
-- forwarding signal
+New config:
+- `OPENAI_REASONING_EFFORT=medium`
 
-For plain-text-like documents (`.txt`, `.md`, `.csv`, `.json`, `.log`, `.yaml`, `.yml` and `text/*`) it also extracts text directly for analysis.
+Recommendation for this project:
+- best quality: `gpt-5.2`
+- strong balance of quality / speed: `gpt-5.1`
+- current fallback / cheaper option: `gpt-4.1-mini`
 
-### 6. Richer Inbox in Mini App
+If `OPENAI_MODEL` or `OPENAI_VISION_MODEL` starts with `gpt-5`, the app automatically passes reasoning settings to the API.
 
-Inbox items now expose:
-- AI answer
-- clarification question
-- resolved object type
-- direct resolve actions
+### 5. Russian navigation in Mini App
 
-### 7. Full task control in Mini App
+Main user-facing tabs are now in Russian:
+- `Главная`
+- `Входящие`
+- `Сегодня`
+- `Задачи`
+- `Календарь`
+- `События`
+- `Списки`
+- `Заметки`
+- `Поиск`
+
+### 6. Full task control in Mini App
 
 Tasks can now be managed directly in the app:
 - mark as done
@@ -103,59 +123,67 @@ Tasks can now be managed directly in the app:
 - delete task
 - filter between all tasks and only incomplete tasks
 
-### 8. Calendar view
+### 7. Calendar view
 
-The Mini App now includes a calendar tab that combines:
+The Mini App includes a calendar tab that combines:
 - tasks by due date or scheduled date
 - events by start date
 - reminders by reminder date
 
 ## Important files
 
-Core intake and AI routing:
-- `bot/handlers/content.py`
+AI and intake:
 - `services/ingestion.py`
 - `services/analysis.py`
 - `parsers/text.py`
 - `ai/openai_provider.py`
+- `utils/settings.py`
 
 Resolution and object creation:
 - `services/inbox_actions.py`
 - `services/object_builder.py`
-- `repositories/incoming.py`
 - `api/routes/inbox.py`
 - `api/routes/tasks.py`
 
+Telegram UX:
+- `bot/handlers/content.py`
+- `bot/handlers/common.py`
+- `bot/keyboards.py`
+- `bot/callbacks.py`
+
 Mini App:
-- `mini_app/src/api.ts`
-- `mini_app/src/types.ts`
+- `mini_app/src/app.tsx`
+- `mini_app/src/components/NavBar.tsx`
 - `mini_app/src/pages/InboxPage.tsx`
 - `mini_app/src/pages/TasksPage.tsx`
 - `mini_app/src/pages/CalendarPage.tsx`
-
-## Architecture summary
-
-- `bot/`: aiogram handlers and callbacks
-- `api/`: FastAPI backend for Mini App
-- `services/`: orchestration, ingestion, digests, resolution, reminders
-- `ai/`: provider abstraction with OpenAI and heuristic fallback
-- `parsers/`: date and heuristic content routing
-- `storage/`: file storage abstraction
-- `models/`, `repositories/`, `schemas/`, `db/`: persistence layer
-- `jobs/`: APScheduler reminder/digest jobs
-- `mini_app/`: React/Vite frontend
-- `tests/`: local regression coverage
 
 ## Local setup
 
 ### 1. Prepare environment
 
-- Install Python 3.10+
-- Install Node.js 22+
-- Copy `.env.example` to `.env`
-- Fill at least:
+- install Python 3.10+
+- install Node.js 22+
+- copy `.env.example` to `.env`
+- fill at least:
   - `BOT_TOKEN`
   - `OPENAI_API_KEY`
+
+Recommended model setup for reasoning:
+
+```env
+OPENAI_MODEL=gpt-5.1
+OPENAI_VISION_MODEL=gpt-5.1
+OPENAI_AUDIO_MODEL=gpt-4o-mini-transcribe
+OPENAI_REASONING_EFFORT=medium
+```
+
+If you want maximum quality and are okay with higher cost/latency, use:
+
+```env
+OPENAI_MODEL=gpt-5.2
+OPENAI_VISION_MODEL=gpt-5.2
+```
 
 ### 2. Python environment
 
@@ -181,6 +209,7 @@ DATABASE_URL=postgresql+asyncpg://keepiq:keepiq@localhost:5432/keepiq
 ### 4. Migrations
 
 ```powershell
+$env:PYTHONPATH = "C:\Users\user\Desktop\Телеграм бот\keepiq2"
 .\.venv\Scripts\alembic.exe upgrade head
 ```
 
@@ -219,65 +248,56 @@ cmd /c npm.cmd run dev
 ## Deploy shape
 
 Recommended production shape:
-- Frontend Mini App: Cloudflare Pages
-- Backend API + bot + scheduler: Render
-- Git remote: GitHub
+- frontend Mini App: Cloudflare Pages
+- backend API + bot + scheduler: Render
+- source of truth: GitHub
 
-## Update GitHub / Render / Cloudflare after code changes
+## Deploy update checklist
 
-### Push code to GitHub
+### GitHub
 
 ```powershell
 git status
 git add .
-git commit -m "Improve AI triage and inbox resolution"
+git commit -m "Improve adaptive AI triage"
 git push origin master
 ```
 
-### Render update
+### Render
 
-Render services should redeploy from the updated GitHub repo.
+Check:
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_VISION_MODEL`
+- `OPENAI_AUDIO_MODEL`
+- `OPENAI_REASONING_EFFORT`
+- `BOT_TOKEN`
+- `DATABASE_URL`
+- `MINI_APP_PUBLIC_URL`
 
-Typical services:
-- API service
-- bot worker
-- scheduler worker
+Start commands:
+- API: `python -m uvicorn api.app:app --host 0.0.0.0 --port $PORT`
+- bot: `python -m bot.main`
+- scheduler: `python -m jobs.runner`
 
-Check on Render:
-- Python version is compatible with 3.10+
-- environment variables are set
-- `OPENAI_API_KEY` is present in production
-- `BOT_TOKEN` is present
-- `MINI_APP_PUBLIC_URL` points to the Cloudflare Pages URL
-- `DATABASE_URL` points to production database
-- start commands are correct:
-  - API: `python -m uvicorn api.app:app --host 0.0.0.0 --port $PORT`
-  - bot: `python -m bot.main`
-  - scheduler: `python -m jobs.runner`
+### Cloudflare Pages
 
-If Render does not auto-deploy, trigger manual deploy from the dashboard.
+Check:
+- project root: `mini_app`
+- build command: `npm run build`
+- output directory: `dist`
+- `VITE_API_URL` points to the public Render API URL
 
-### Cloudflare Pages update
+## Current limitations
 
-Cloudflare Pages should rebuild from the same GitHub repo.
+- OCR for arbitrary images is still not a separate dedicated local pipeline.
+- PDF/DOCX binary parsing is still limited in the local fallback path.
+- The heuristic fallback is much simpler than GPT-5 reasoning and exists mainly as a safe backup.
 
-Check on Cloudflare Pages:
-- project points to `mini_app/` as the frontend root if configured that way
-- build command is `npm run build`
-- output directory is `dist`
-- environment variable `VITE_API_URL` points to the public Render API URL
+## Regression coverage
 
-After Cloudflare deploys, update BotFather / Mini App settings if the public Pages domain changed.
-
-## Current known limitations
-
-- OCR for arbitrary images is not yet separated into a dedicated pipeline; image understanding currently relies on the AI provider plus any supplied caption/context.
-- Binary document formats like PDF/DOCX are not yet parsed into full text in the local fallback path.
-- `answer` mode is strongest with OpenAI enabled; heuristic fallback returns a safe generic answer classification.
-
-## Regression coverage added
-
-Tests now explicitly cover:
-- reminder text creates linked task + reminder
-- question text becomes `answer`
-- repeated manual resolve does not duplicate tasks
+Tests currently cover:
+- reminder flow with suggested actions before materialization
+- explicit task gets adaptive scheduling suggestions
+- question becomes `answer`
+- repeated resolve does not duplicate tasks

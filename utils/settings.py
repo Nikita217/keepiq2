@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_MODEL")
     openai_vision_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_VISION_MODEL")
     openai_audio_model: str = Field(default="gpt-4o-mini-transcribe", alias="OPENAI_AUDIO_MODEL")
+    openai_reasoning_effort: str = Field(default="medium", alias="OPENAI_REASONING_EFFORT")
     database_url: str = Field(default="sqlite+aiosqlite:///./keepiq.db", alias="DATABASE_URL")
     local_storage_root: Path = Field(default=Path("./uploads"), alias="LOCAL_STORAGE_ROOT")
     timezone: str = Field(default="Europe/Moscow", alias="TIMEZONE")

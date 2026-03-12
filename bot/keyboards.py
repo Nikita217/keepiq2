@@ -26,39 +26,33 @@ def mini_app_reply_keyboard(url: str) -> ReplyKeyboardMarkup:
     )
 
 
-def inbox_actions(item_id: str, proposed_type: str = "note") -> InlineKeyboardMarkup:
-    confirm_label = "Подтвердить" if proposed_type != "answer" else "Сохранить контекст"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+def inbox_actions(item_id: str, suggested_actions: list[dict] | None = None) -> InlineKeyboardMarkup:
+    actions = suggested_actions or []
+    rows: list[list[InlineKeyboardButton]] = []
+    current_row: list[InlineKeyboardButton] = []
+
+    for index, action in enumerate(actions[:4]):
+        current_row.append(
+            InlineKeyboardButton(
+                text=action.get("label", "Выбрать"),
+                callback_data=InboxCallback(action="suggest", item_id=item_id, value=str(index)).pack(),
+            )
+        )
+        if len(current_row) == 2:
+            rows.append(current_row)
+            current_row = []
+
+    if current_row:
+        rows.append(current_row)
+
+    if not rows:
+        rows.append(
             [
                 InlineKeyboardButton(
-                    text=confirm_label,
+                    text="Сохранить",
                     callback_data=InboxCallback(action="confirm", item_id=item_id).pack(),
-                ),
-                InlineKeyboardButton(
-                    text="Нужно ответить",
-                    callback_data=InboxCallback(action="save_as", item_id=item_id, target="reply_later").pack(),
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Как задачу",
-                    callback_data=InboxCallback(action="save_as", item_id=item_id, target="task").pack(),
-                ),
-                InlineKeyboardButton(
-                    text="Как заметку",
-                    callback_data=InboxCallback(action="save_as", item_id=item_id, target="note").pack(),
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Как список",
-                    callback_data=InboxCallback(action="save_as", item_id=item_id, target="list").pack(),
-                ),
-                InlineKeyboardButton(
-                    text="Как событие",
-                    callback_data=InboxCallback(action="save_as", item_id=item_id, target="event").pack(),
-                ),
-            ],
-        ]
-    )
+                )
+            ]
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
