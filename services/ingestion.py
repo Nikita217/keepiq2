@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import urlparse
@@ -10,6 +10,9 @@ from repositories.incoming import IncomingRepository
 from services.analysis import AnalysisService
 from services.object_builder import ObjectBuilderService
 from storage.base import StorageAdapter
+
+
+AUTO_CREATE_TYPES = {"task", "reminder", "event", "list", "reply_later"}
 
 
 class IngestionService:
@@ -148,7 +151,7 @@ class IngestionService:
         if payload.proposed_type == "reply_later" and not payload.draft_replies:
             source_text = item.raw_text or transcript or ocr_text or payload.summary
             payload.draft_replies = await self.analysis.provider.generate_reply_drafts(source_text)
-        if payload.confidence >= 0.8 and not payload.needs_confirmation:
+        if self._should_materialize(payload):
             await self.object_builder.materialize(user_id=item.user_id, incoming_item_id=item.id, payload=payload)
         await self.repo.add_log(
             ProcessingLog(
@@ -158,3 +161,8 @@ class IngestionService:
                 payload_json=payload.model_dump(mode="json"),
             )
         )
+
+    def _should_materialize(self, payload) -> bool:
+        if payload.proposed_type in AUTO_CREATE_TYPES and payload.confidence >= 0.75 and not payload.needs_confirmation:
+            return True
+        return payload.confidence >= 0.8 and not payload.needs_confirmation

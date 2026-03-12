@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #f3ede2;
   --bg-soft: #fbf6ee;
   --ink: #18221f;
@@ -142,4 +142,19 @@ input {
 @media (max-width: 720px) {
   .navGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actionsRow { flex-direction: column; }
+}
+
+.errorBanner {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 20px;
+  background: rgba(180, 38, 38, 0.12);
+  border: 1px solid rgba(180, 38, 38, 0.2);
+  color: #7d1f16;
+}
+
+.syncHint {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
 }

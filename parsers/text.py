@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from datetime import timedelta
@@ -10,7 +10,7 @@ from schemas.ai import AnalysisPayload, CandidateObject, ExtractedEntity
 from utils.text import compact_text, split_lines_to_items
 
 
-TASK_VERBS = ["купить", "отправить", "написать", "позвонить", "сделать", "оплатить"]
+TASK_VERBS = ["купить", "отправить", "написать", "позвонить", "сделать", "оплатить", "заказать"]
 REPLY_HINTS = ["ответить", "reply", "перепис", "сообщени", "чат", "вернуться"]
 IDEA_HINTS = ["идея", "мысль", "референс", "сохранить", "заметка"]
 
@@ -44,7 +44,7 @@ class HeuristicTextParser:
                 )
             )
 
-        voice_candidates = self._voice_candidates(normalized, lowered, dates, hint)
+        voice_candidates = self._voice_candidates(normalized, dates, hint)
         shopping_items = self._shopping_items(normalized, lowered)
 
         if voice_candidates:
@@ -56,6 +56,7 @@ class HeuristicTextParser:
         elif looks_like_ticket(normalized) or hint in {"ticket", "booking"}:
             proposed_type = "event"
             confidence = 0.84
+            needs_confirmation = False if dates else True
             candidates.append(
                 CandidateObject(
                     object_type="event",
@@ -76,7 +77,8 @@ class HeuristicTextParser:
                 )
         elif any(word in lowered for word in REPLY_HINTS) or hint == "forwarded":
             proposed_type = "reply_later"
-            confidence = 0.76
+            confidence = 0.82
+            needs_confirmation = False if hint == "forwarded" else True
             candidates.append(
                 CandidateObject(
                     object_type="reply_later",
@@ -87,7 +89,7 @@ class HeuristicTextParser:
             )
         elif lowered.startswith("напомни") or "не забыть" in lowered or "напомнить" in lowered:
             proposed_type = "reminder"
-            confidence = 0.87 if dates else 0.68
+            confidence = 0.87 if dates else 0.72
             needs_confirmation = not bool(dates)
             title = normalized.replace("напомни", "").replace("напомнить", "").strip(" :.-")
             candidates.append(
@@ -121,7 +123,8 @@ class HeuristicTextParser:
             )
         elif len(split_lines_to_items(normalized)) >= 3 and any(verb in lowered for verb in TASK_VERBS):
             proposed_type = "list"
-            confidence = 0.79
+            confidence = 0.8
+            needs_confirmation = False
             items = split_lines_to_items(normalized)
             candidates.append(
                 CandidateObject(
@@ -135,9 +138,10 @@ class HeuristicTextParser:
             proposed_type = "note"
             confidence = 0.72
             candidates.append(CandidateObject(object_type="note", title=normalized[:80], description=normalized))
-        elif any(verb in lowered for verb in TASK_VERBS):
+        elif self._looks_like_explicit_task(lowered):
             proposed_type = "task"
-            confidence = 0.69
+            confidence = 0.82
+            needs_confirmation = False
             candidates.append(
                 CandidateObject(
                     object_type="task",
@@ -174,7 +178,7 @@ class HeuristicTextParser:
             raw={"hint": hint},
         )
 
-    def _voice_candidates(self, normalized: str, lowered: str, dates, hint: str | None) -> list[CandidateObject]:
+    def _voice_candidates(self, normalized: str, dates, hint: str | None) -> list[CandidateObject]:
         if hint != "voice":
             return []
         segments = [segment for segment in re.split(r",|;| а ещё | и ещё | потом ", normalized) if compact_text(segment)]
@@ -199,3 +203,6 @@ class HeuristicTextParser:
         raw_items = re.split(r",| и | / ", normalized[7:])
         items = [compact_text(item) for item in raw_items if compact_text(item)]
         return items if len(items) >= 2 else []
+
+    def _looks_like_explicit_task(self, lowered: str) -> bool:
+        return lowered.startswith(tuple(TASK_VERBS)) or any(f"{verb} " in lowered for verb in TASK_VERBS)

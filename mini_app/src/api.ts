@@ -1,11 +1,40 @@
-﻿import { DashboardResponse, EventItem, IncomingItem, ListEntity, NoteItem, ReminderItem, ReplyLaterItem, SavedItem, SearchResult, TaskItem } from "./types";
-import { getInitData } from "./telegram";
+import {
+  DashboardResponse,
+  EventItem,
+  IncomingItem,
+  ListEntity,
+  NoteItem,
+  ReminderItem,
+  ReplyLaterItem,
+  SavedItem,
+  SearchResult,
+  TaskItem,
+} from "./types";
+import { getInitData, getTelegramUserId, isInsideTelegram } from "./telegram";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 function buildHeaders(): HeadersInit {
   const initData = getInitData();
-  return initData ? { "X-Telegram-Init-Data": initData } : { "X-Telegram-User-Id": "1" };
+  if (initData) {
+    return { "X-Telegram-Init-Data": initData };
+  }
+
+  const telegramUserId = getTelegramUserId();
+  if (telegramUserId) {
+    return { "X-Telegram-User-Id": String(telegramUserId) };
+  }
+
+  return { "X-Telegram-User-Id": "1" };
+}
+
+function buildErrorMessage(response: Response, body: string): string {
+  if (response.status === 401) {
+    return isInsideTelegram()
+      ? "Mini App did not pass Telegram authentication. Reopen it from the bot menu or /start button."
+      : "This session is not authenticated. Open the app from Telegram or use local dev fallback.";
+  }
+  return `API error ${response.status}: ${body || response.statusText}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -18,7 +47,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const body = await response.text();
+    throw new Error(buildErrorMessage(response, body));
   }
   return response.json() as Promise<T>;
 }

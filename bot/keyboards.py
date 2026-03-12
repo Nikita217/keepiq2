@@ -1,6 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
 
 from bot.callbacks import InboxCallback
 
@@ -9,6 +15,16 @@ from bot.callbacks import InboxCallback
 def mini_app_keyboard(url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="Open Mini App", web_app=WebAppInfo(url=url))]]
+    )
+
+
+
+def mini_app_reply_keyboard(url: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Open KeepIQ", web_app=WebAppInfo(url=url))]],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Send text, voice, links, screenshots...",
     )
 
 

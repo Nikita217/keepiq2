@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import select
 
-from bot.keyboards import mini_app_keyboard
+from bot.keyboards import mini_app_reply_keyboard
 from db.session import SessionLocal
 from models import IncomingItem, Reminder, Task
 from models.enums import ParseStatus
@@ -20,9 +20,15 @@ async def cmd_start(message: Message) -> None:
     mini_app_url = settings.mini_app_public_url or settings.mini_app_dev_url
     text = (
         "KeepIQ принимает текст, голосовые, ссылки, фото, скрины и пересланные сообщения.\n"
-        "Просто отправь входящее как есть, а Mini App покажет разбор, Today, Inbox и поиск."
+        "Отправь входящее как есть. Большая кнопка ниже всегда открывает Mini App с Inbox, Today и Search."
     )
-    await message.answer(text, reply_markup=mini_app_keyboard(mini_app_url))
+    await message.answer(text, reply_markup=mini_app_reply_keyboard(mini_app_url))
+
+
+@router.message(Command("open"))
+async def cmd_open(message: Message) -> None:
+    mini_app_url = settings.mini_app_public_url or settings.mini_app_dev_url
+    await message.answer("Mini App ready below.", reply_markup=mini_app_reply_keyboard(mini_app_url))
 
 
 @router.message(Command("inbox"))
