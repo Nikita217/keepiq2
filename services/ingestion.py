@@ -1,0 +1,160 @@
+﻿from __future__ import annotations
+
+from pathlib import Path
+from urllib.parse import urlparse
+
+from ai.base import AIProvider
+from models import AIAnalysisResult, Attachment, IncomingItem, ParsedEntity, ProcessingLog
+from models.enums import IncomingType, ParseStatus
+from repositories.incoming import IncomingRepository
+from services.analysis import AnalysisService
+from services.object_builder import ObjectBuilderService
+from storage.base import StorageAdapter
+
+
+class IngestionService:
+    def __init__(self, session, *, provider: AIProvider, storage: StorageAdapter) -> None:
+        self.session = session
+        self.repo = IncomingRepository(session)
+        self.analysis = AnalysisService(provider)
+        self.object_builder = ObjectBuilderService(session)
+        self.storage = storage
+
+    async def ingest_text(
+        self,
+        *,
+        user_id: int,
+        chat_id: int,
+        message_id: int,
+        update_id: int | None,
+        text: str,
+        forwarded: bool = False,
+    ) -> IncomingItem:
+        incoming_type = IncomingType.FORWARDED.value if forwarded else IncomingType.TEXT.value
+        if text.strip().startswith("http://") or text.strip().startswith("https://"):
+            incoming_type = IncomingType.LINK.value
+
+        item = IncomingItem(
+            user_id=user_id,
+            telegram_chat_id=chat_id,
+            telegram_message_id=message_id,
+            telegram_update_id=update_id,
+            incoming_type=incoming_type,
+            raw_text=text,
+            source_url=text if incoming_type == IncomingType.LINK.value else None,
+            metadata_json={"forwarded": forwarded},
+            parse_status=ParseStatus.PROCESSING.value,
+        )
+        await self.repo.create(item)
+        await self.repo.add_log(ProcessingLog(incoming_item_id=item.id, stage="ingest", message="Text accepted"))
+        await self._analyze_and_materialize(item, forwarded=forwarded)
+        await self.session.commit()
+        await self.session.refresh(item)
+        return item
+
+    async def ingest_file(
+        self,
+        *,
+        user_id: int,
+        chat_id: int,
+        message_id: int,
+        update_id: int | None,
+        incoming_type: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        telegram_file_id: str | None = None,
+        telegram_unique_file_id: str | None = None,
+        metadata: dict | None = None,
+    ) -> IncomingItem:
+        item = IncomingItem(
+            user_id=user_id,
+            telegram_chat_id=chat_id,
+            telegram_message_id=message_id,
+            telegram_update_id=update_id,
+            incoming_type=incoming_type,
+            metadata_json=metadata or {},
+            parse_status=ParseStatus.PROCESSING.value,
+        )
+        await self.repo.create(item)
+
+        saved_path = await self.storage.save_bytes(user_id=user_id, filename=filename, content=content)
+        await self.repo.add_attachment(
+            Attachment(
+                incoming_item_id=item.id,
+                telegram_file_id=telegram_file_id,
+                telegram_unique_file_id=telegram_unique_file_id,
+                file_name=filename,
+                content_type=content_type,
+                local_path=str(saved_path),
+                file_size=len(content),
+            )
+        )
+        await self.repo.add_log(ProcessingLog(incoming_item_id=item.id, stage="storage", message=f"Saved {filename}"))
+        await self._analyze_and_materialize(item, file_path=saved_path)
+        await self.session.commit()
+        await self.session.refresh(item)
+        return item
+
+    async def _analyze_and_materialize(self, item: IncomingItem, *, file_path: Path | None = None, forwarded: bool = False) -> None:
+        transcript = item.transcript_text
+        ocr_text = item.ocr_text
+
+        if item.incoming_type in {IncomingType.VOICE.value, IncomingType.AUDIO.value} and file_path:
+            transcript = await self.analysis.transcribe_audio(file_path)
+            item.transcript_text = transcript
+            await self.repo.add_log(ProcessingLog(incoming_item_id=item.id, stage="transcription", message="Audio transcribed"))
+
+        payload = await self.analysis.analyze_incoming(
+            incoming_type=item.incoming_type,
+            raw_text=item.raw_text,
+            transcript_text=transcript,
+            ocr_text=ocr_text,
+            file_path=file_path,
+            forwarded=forwarded,
+        )
+        if payload.proposed_type == "saved" and item.source_url:
+            domain = urlparse(item.source_url).netloc
+            payload.summary = payload.summary or f"Ссылка сохранена: {domain}"
+        item.summary = payload.summary
+        item.proposed_type = payload.proposed_type
+        item.confidence = payload.confidence
+        item.needs_confirmation = payload.needs_confirmation
+        item.parse_status = ParseStatus.NEEDS_REVIEW.value if payload.needs_confirmation else ParseStatus.CONFIRMED.value
+        await self.repo.add_analysis(
+            AIAnalysisResult(
+                incoming_item_id=item.id,
+                provider=payload.provider,
+                model=payload.model,
+                prompt_version="v1",
+                summary=payload.summary,
+                proposed_type=payload.proposed_type,
+                confidence=payload.confidence,
+                result_json=payload.model_dump(mode="json"),
+                fallback_used=payload.provider != "openai",
+            )
+        )
+        for entity in payload.extracted_entities:
+            await self.repo.add_entity(
+                ParsedEntity(
+                    incoming_item_id=item.id,
+                    entity_type=entity.entity_type,
+                    value=entity.value,
+                    normalized_value=entity.normalized_value,
+                    confidence=entity.confidence,
+                    source=payload.provider,
+                )
+            )
+        if payload.proposed_type == "reply_later" and not payload.draft_replies:
+            source_text = item.raw_text or transcript or ocr_text or payload.summary
+            payload.draft_replies = await self.analysis.provider.generate_reply_drafts(source_text)
+        if payload.confidence >= 0.8 and not payload.needs_confirmation:
+            await self.object_builder.materialize(user_id=item.user_id, incoming_item_id=item.id, payload=payload)
+        await self.repo.add_log(
+            ProcessingLog(
+                incoming_item_id=item.id,
+                stage="analysis",
+                message=f"Analyzed as {payload.proposed_type}",
+                payload_json=payload.model_dump(mode="json"),
+            )
+        )

@@ -1,0 +1,35 @@
+﻿from __future__ import annotations
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.routes import auth, dashboard, events, inbox, lists, notes, search, settings, tasks
+from utils.logging import configure_logging
+from utils.settings import get_settings
+
+configure_logging()
+settings_obj = get_settings()
+app = FastAPI(title=settings_obj.app_name)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings_obj.mini_app_dev_url, settings_obj.mini_app_public_url] if settings_obj.mini_app_public_url else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+app.include_router(dashboard.router)
+app.include_router(inbox.router)
+app.include_router(tasks.router)
+app.include_router(events.router)
+app.include_router(lists.router)
+app.include_router(notes.router)
+app.include_router(search.router)
+app.include_router(settings.router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}

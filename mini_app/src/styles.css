@@ -1,0 +1,145 @@
+﻿:root {
+  --bg: #f3ede2;
+  --bg-soft: #fbf6ee;
+  --ink: #18221f;
+  --muted: #5f685f;
+  --accent: #d46f34;
+  --accent-2: #1f6c5d;
+  --line: rgba(24, 34, 31, 0.12);
+  --shadow: 0 14px 40px rgba(24, 34, 31, 0.08);
+  font-family: "Aptos", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(212, 111, 52, 0.18), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(31, 108, 93, 0.14), transparent 35%),
+    var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, input { font: inherit; }
+button {
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  padding: 0.8rem 1rem;
+}
+button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+input {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.72);
+  padding: 0.9rem 1rem;
+}
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1rem 1rem 3rem;
+}
+.topbar {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  color: var(--accent-2);
+}
+.topbar h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(2rem, 8vw, 3.4rem);
+  line-height: 0.95;
+}
+.navGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.navChip {
+  background: rgba(255,255,255,0.68);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.navChip.active {
+  background: var(--ink);
+  color: white;
+}
+.pageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.stack { display: grid; gap: 1rem; }
+.card {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 28px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.cardHead h3 { margin: 0; }
+.cardHead span { color: var(--muted); font-size: 0.85rem; }
+.metricRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.metricRow div {
+  background: var(--bg-soft);
+  padding: 0.9rem;
+  border-radius: 22px;
+}
+.metricRow strong { display: block; font-size: 1.7rem; }
+.listClean {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: rgba(31, 108, 93, 0.1);
+  color: var(--accent-2);
+  font-size: 0.82rem;
+}
+.actionsRow {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+.searchBox {
+  display: grid;
+  gap: 0.45rem;
+}
+.empty {
+  padding: 1.4rem;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.72);
+}
+@media (max-width: 720px) {
+  .navGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actionsRow { flex-direction: column; }
+}
