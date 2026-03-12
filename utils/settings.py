@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,10 +42,20 @@ class Settings(BaseSettings):
     def cors_allowed_origins(self) -> list[str]:
         origins: list[str] = []
         for candidate in (self.mini_app_dev_url, self.mini_app_public_url):
-            normalized = candidate.strip().rstrip("/")
+            normalized = self._normalize_origin(candidate)
             if normalized and normalized not in origins:
                 origins.append(normalized)
         return origins
+
+    @staticmethod
+    def _normalize_origin(candidate: str) -> str:
+        raw = candidate.strip().rstrip("/")
+        if not raw:
+            return ""
+        parsed = urlparse(raw)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+        return raw
 
 
 @lru_cache(maxsize=1)

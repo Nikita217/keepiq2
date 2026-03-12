@@ -91,7 +91,7 @@ export function App() {
       <NavBar active={tab} onChange={setTab} aside={<button className="ghost" onClick={() => refresh()}>Refresh</button>} />
       {error ? <section className="errorBanner">{error}</section> : null}
       {lastSyncAt ? <p className="syncHint">Last sync: {lastSyncAt}</p> : null}
-      {isLoading && !dashboard ? <div className="empty">Loading KeepIQ…</div> : null}
+      {isLoading && !dashboard ? <div className="empty">Loading KeepIQ...</div> : null}
       {tab === "dashboard" ? <DashboardPage data={dashboard} /> : null}
       {tab === "inbox" ? <InboxPage items={inbox} refresh={refresh} /> : null}
       {tab === "today" ? <TodayPage tasks={tasks} reminders={reminders} events={events} inbox={inbox} /> : null}

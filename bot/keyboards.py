@@ -31,31 +31,31 @@ def inbox_actions(item_id: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="РџРѕРґС‚РІРµСЂРґРёС‚СЊ",
+                    text="Подтвердить",
                     callback_data=InboxCallback(action="confirm", item_id=item_id).pack(),
                 ),
                 InlineKeyboardButton(
-                    text="РќСѓР¶РЅРѕ РѕС‚РІРµС‚РёС‚СЊ",
+                    text="Нужно ответить",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="reply_later").pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="РљР°Рє Р·Р°РґР°С‡Сѓ",
+                    text="Как задачу",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="task").pack(),
                 ),
                 InlineKeyboardButton(
-                    text="РљР°Рє Р·Р°РјРµС‚РєСѓ",
+                    text="Как заметку",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="note").pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="РљР°Рє СЃРїРёСЃРѕРє",
+                    text="Как список",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="list").pack(),
                 ),
                 InlineKeyboardButton(
-                    text="РљР°Рє СЃРѕР±С‹С‚РёРµ",
+                    text="Как событие",
                     callback_data=InboxCallback(action="save_as", item_id=item_id, target="event").pack(),
                 ),
             ],
