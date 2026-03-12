@@ -20,6 +20,9 @@ class IncomingItemRead(BaseModel):
     transcript_text: str | None = None
     ocr_text: str | None = None
     source_url: str | None = None
+    assistant_response: str | None = None
+    clarification_question: str | None = None
+    resolved_object_type: str | None = None
     created_at: datetime
     attachments: list[AttachmentRead] = Field(default_factory=list)
     entities: list[ParsedEntityRead] = Field(default_factory=list)
@@ -27,7 +30,7 @@ class IncomingItemRead(BaseModel):
 
 
 class InboxActionRequest(BaseModel):
-    target_type: str
+    target_type: str | None = None
     title: str | None = None
     force_confirmation: bool = False
 

@@ -7,10 +7,7 @@ from aiogram.types import CallbackQuery
 
 from bot.callbacks import InboxCallback
 from db.session import SessionLocal
-from models import IncomingItem
-from models.enums import ParseStatus
-from schemas.ai import AnalysisPayload, CandidateObject
-from services.object_builder import ObjectBuilderService
+from services.inbox_actions import InboxActionService
 from services.reminders import ReminderService
 
 router = Router()
@@ -19,44 +16,28 @@ router = Router()
 @router.callback_query(InboxCallback.filter(F.action == "confirm"))
 async def confirm_inbox_item(callback: CallbackQuery, callback_data: InboxCallback) -> None:
     async with SessionLocal() as session:
-        item = await session.get(IncomingItem, UUID(callback_data.item_id))
-        if item is None:
+        try:
+            item = await InboxActionService(session).resolve(item_id=UUID(callback_data.item_id))
+        except LookupError:
             await callback.answer("Объект не найден", show_alert=True)
             return
-        item.needs_confirmation = False
-        item.parse_status = ParseStatus.CONFIRMED.value
-        await session.commit()
-    await callback.answer("Подтверждено")
+    resolved_type = item.metadata_json.get("resolved_object_type") if item.metadata_json else item.proposed_type
+    await callback.answer(f"Подтверждено как {resolved_type}")
 
 
 @router.callback_query(InboxCallback.filter(F.action == "save_as"))
 async def save_as(callback: CallbackQuery, callback_data: InboxCallback) -> None:
     async with SessionLocal() as session:
-        item = await session.get(IncomingItem, UUID(callback_data.item_id))
-        if item is None:
+        try:
+            item = await InboxActionService(session).resolve(
+                item_id=UUID(callback_data.item_id),
+                target_type=callback_data.target,
+            )
+        except LookupError:
             await callback.answer("Объект не найден", show_alert=True)
             return
-        payload = AnalysisPayload(
-            provider="manual",
-            summary=item.summary or item.raw_text or "Manual save",
-            proposed_type=callback_data.target,
-            confidence=1.0,
-            needs_confirmation=False,
-            candidates=[
-                CandidateObject(
-                    object_type=callback_data.target,
-                    title=(item.summary or item.raw_text or callback_data.target)[:100],
-                    description=item.raw_text or item.transcript_text or item.ocr_text or item.summary,
-                )
-            ],
-            draft_replies={},
-            raw={"manual": True},
-        )
-        await ObjectBuilderService(session).materialize(user_id=item.user_id, incoming_item_id=item.id, payload=payload)
-        item.needs_confirmation = False
-        item.parse_status = ParseStatus.CONFIRMED.value
-        await session.commit()
-    await callback.answer("Сохранено")
+    resolved_type = item.metadata_json.get("resolved_object_type") if item.metadata_json else callback_data.target
+    await callback.answer(f"Сохранено как {resolved_type}")
 
 
 @router.callback_query(F.data.startswith("reminder:done:"))

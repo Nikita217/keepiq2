@@ -34,4 +34,6 @@ class AnalysisPayload(BaseModel):
     extracted_entities: list[ExtractedEntity] = Field(default_factory=list)
     candidates: list[CandidateObject] = Field(default_factory=list)
     draft_replies: dict[str, str] = Field(default_factory=dict)
+    assistant_response: str | None = None
+    clarification_question: str | None = None
     raw: dict = Field(default_factory=dict)

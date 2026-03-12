@@ -9,7 +9,8 @@ from api.dependencies import get_current_user, get_db_session
 from models import IncomingItem
 from models.enums import ParseStatus
 from repositories.incoming import IncomingRepository
-from schemas.incoming import IncomingItemRead, IncomingUpdateRequest
+from schemas.incoming import InboxActionRequest, IncomingItemRead, IncomingUpdateRequest
+from services.inbox_actions import InboxActionService
 
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 
@@ -18,26 +19,29 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 async def list_inbox(user=Depends(get_current_user), session: AsyncSession = Depends(get_db_session)):
     repo = IncomingRepository(session)
     items = await repo.list_inbox(user.id)
-    return [
-        IncomingItemRead(
-            id=item.id,
-            incoming_type=item.incoming_type,
-            parse_status=item.parse_status,
-            summary=item.summary,
-            proposed_type=item.proposed_type,
-            confidence=item.confidence,
-            needs_confirmation=item.needs_confirmation,
-            raw_text=item.raw_text,
-            transcript_text=item.transcript_text,
-            ocr_text=item.ocr_text,
-            source_url=item.source_url,
-            created_at=item.created_at,
-            attachments=item.attachments,
-            entities=item.entities,
-            logs=item.processing_logs,
+    return [_to_read_model(item) for item in items]
+
+
+@router.post("/{item_id}/resolve", response_model=IncomingItemRead)
+async def resolve_inbox_item(
+    item_id: UUID,
+    payload: InboxActionRequest,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        item = await InboxActionService(session).resolve(
+            item_id=item_id,
+            user_id=user.id,
+            target_type=payload.target_type,
+            title=payload.title,
+            force_confirmation=payload.force_confirmation,
         )
-        for item in items
-    ]
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="item not found") from exc
+    return _to_read_model(item)
 
 
 @router.patch("/{item_id}", response_model=IncomingItemRead)
@@ -58,6 +62,11 @@ async def update_inbox_item(
         item.parse_status = ParseStatus.CONFIRMED.value
     await session.commit()
     await session.refresh(item)
+    return _to_read_model(item)
+
+
+def _to_read_model(item: IncomingItem) -> IncomingItemRead:
+    metadata = item.metadata_json or {}
     return IncomingItemRead(
         id=item.id,
         incoming_type=item.incoming_type,
@@ -70,6 +79,9 @@ async def update_inbox_item(
         transcript_text=item.transcript_text,
         ocr_text=item.ocr_text,
         source_url=item.source_url,
+        assistant_response=metadata.get("assistant_response"),
+        clarification_question=metadata.get("clarification_question"),
+        resolved_object_type=metadata.get("resolved_object_type"),
         created_at=item.created_at,
         attachments=item.attachments,
         entities=item.entities,

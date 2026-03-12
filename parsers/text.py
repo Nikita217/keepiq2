@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from datetime import timedelta
@@ -10,14 +10,31 @@ from schemas.ai import AnalysisPayload, CandidateObject, ExtractedEntity
 from utils.text import compact_text, split_lines_to_items
 
 
-TASK_VERBS = ["купить", "отправить", "написать", "позвонить", "сделать", "оплатить", "заказать"]
+TASK_VERBS = ["купить", "отправить", "написать", "позвонить", "сделать", "оплатить", "заказать", "проверить"]
 REPLY_HINTS = ["ответить", "reply", "перепис", "сообщени", "чат", "вернуться"]
 IDEA_HINTS = ["идея", "мысль", "референс", "сохранить", "заметка"]
+QUESTION_WORDS = [
+    "что",
+    "как",
+    "когда",
+    "где",
+    "почему",
+    "зачем",
+    "кто",
+    "сколько",
+    "какой",
+    "какая",
+    "какие",
+    "можно ли",
+    "нужно ли",
+]
+CHAT_HINTS = ["переписка", "чат", "сообщение", "message", "telegram", "whatsapp"]
 
 
 class HeuristicTextParser:
     def analyze(self, text: str, *, hint: str | None = None) -> AnalysisPayload:
-        normalized = compact_text(text)
+        context = self._parse_context(text)
+        normalized = context["semantic_text"]
         lowered = normalized.lower()
         dates = extract_dates(normalized)
         entities: list[ExtractedEntity] = []
@@ -26,6 +43,8 @@ class HeuristicTextParser:
         summary = normalized[:180] if normalized else "Пустой ввод"
         confidence = 0.45
         needs_confirmation = True
+        assistant_response: str | None = None
+        clarification_question: str | None = None
 
         urls = [token for token in normalized.split() if token.startswith("http://") or token.startswith("https://")]
         for url in urls:
@@ -47,12 +66,28 @@ class HeuristicTextParser:
         voice_candidates = self._voice_candidates(normalized, dates, hint)
         shopping_items = self._shopping_items(normalized, lowered)
 
-        if voice_candidates:
+        if self._looks_like_question(normalized, lowered, hint):
+            proposed_type = "answer"
+            confidence = 0.82
+            needs_confirmation = False
+            assistant_response = self._build_question_answer(normalized, hint)
+            summary = "Распознал вопрос и подготовил ответ"
+            candidates.append(
+                CandidateObject(
+                    object_type="note",
+                    title=normalized[:80] or "Вопрос",
+                    description=normalized,
+                    metadata={"kind": "answer_context"},
+                )
+            )
+        elif voice_candidates:
             proposed_type = "task"
             confidence = 0.86
             needs_confirmation = False
             candidates = voice_candidates
-            summary = f"Выделил {len(voice_candidates)} объекта из одного голосового"
+            summary = f"Выделил {len(voice_candidates)} пункта из одного сообщения"
+            if dates:
+                clarification_question = "Поставить напоминание к указанному времени?"
         elif looks_like_ticket(normalized) or hint in {"ticket", "booking"}:
             proposed_type = "event"
             confidence = 0.84
@@ -63,7 +98,7 @@ class HeuristicTextParser:
                     title="Событие из билета" if len(normalized) > 60 else normalized,
                     description=normalized,
                     event_at=dates[0] if dates else None,
-                    metadata={"kind": "ticket_or_booking"},
+                    metadata={"kind": "ticket_or_booking", "source_hint": context["filename"]},
                 )
             )
             if dates:
@@ -73,9 +108,10 @@ class HeuristicTextParser:
                         title="Напоминание о событии",
                         remind_at=dates[0] - timedelta(hours=3),
                         description="Автопредложение напоминания за 3 часа",
+                        metadata={"linked_to": "event"},
                     )
                 )
-        elif any(word in lowered for word in REPLY_HINTS) or hint == "forwarded":
+        elif self._looks_like_chat_capture(lowered, context) or any(word in lowered for word in REPLY_HINTS) or hint == "forwarded":
             proposed_type = "reply_later"
             confidence = 0.82
             needs_confirmation = False if hint == "forwarded" else True
@@ -98,6 +134,7 @@ class HeuristicTextParser:
                     title=title or "Напоминание",
                     description=normalized,
                     due_at=dates[0] if dates else None,
+                    metadata={"linked_to": "reminder"},
                 )
             )
             candidates.append(
@@ -106,6 +143,7 @@ class HeuristicTextParser:
                     title=title or "Напоминание",
                     remind_at=dates[0] if dates else None,
                     description=normalized,
+                    metadata={"linked_to": "task"},
                 )
             )
         elif shopping_items:
@@ -150,6 +188,8 @@ class HeuristicTextParser:
                     due_at=dates[0] if dates else None,
                 )
             )
+            if dates:
+                clarification_question = "Поставить отдельное напоминание к этому сроку?"
         elif urls:
             proposed_type = "saved"
             confidence = 0.73
@@ -175,8 +215,32 @@ class HeuristicTextParser:
             needs_confirmation=needs_confirmation,
             extracted_entities=entities,
             candidates=candidates,
-            raw={"hint": hint},
+            draft_replies={},
+            assistant_response=assistant_response,
+            clarification_question=clarification_question,
+            raw={"hint": hint, "context": context},
         )
+
+    def _parse_context(self, text: str) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        semantic_parts: list[str] = []
+        for raw_line in text.splitlines():
+            line = compact_text(raw_line)
+            if not line:
+                continue
+            if ":" in line:
+                key, value = line.split(":", 1)
+                normalized_key = compact_text(key).lower()
+                normalized_value = compact_text(value)
+                fields[normalized_key] = normalized_value
+                if normalized_key in {"user_text", "transcript", "ocr_text", "caption", "filename", "media_title"}:
+                    semantic_parts.append(normalized_value)
+            else:
+                semantic_parts.append(line)
+        semantic_text = compact_text(" ".join(semantic_parts) or text)
+        fields["semantic_text"] = semantic_text
+        fields.setdefault("filename", "")
+        return fields
 
     def _voice_candidates(self, normalized: str, dates, hint: str | None) -> list[CandidateObject]:
         if hint != "voice":
@@ -206,3 +270,25 @@ class HeuristicTextParser:
 
     def _looks_like_explicit_task(self, lowered: str) -> bool:
         return lowered.startswith(tuple(TASK_VERBS)) or any(f"{verb} " in lowered for verb in TASK_VERBS)
+
+    def _looks_like_question(self, normalized: str, lowered: str, hint: str | None) -> bool:
+        if hint == "voice" and self._looks_like_explicit_task(lowered):
+            return False
+        if "?" in normalized:
+            return True
+        return any(lowered.startswith(prefix) for prefix in QUESTION_WORDS)
+
+    def _looks_like_chat_capture(self, lowered: str, context: dict[str, str]) -> bool:
+        if any(marker in lowered for marker in CHAT_HINTS):
+            return True
+        filename = context.get("filename", "").lower()
+        return "chat" in filename or "dialog" in filename or "screen" in filename
+
+    def _build_question_answer(self, normalized: str, hint: str | None) -> str:
+        if hint == "image":
+            return "Похоже, во вложении содержится вопрос. Я сохранил исходник; для точного ответа использую AI-анализ изображения, а в резервном режиме лучше открыть это в Mini App и уточнить контекст."
+        if "когда" in normalized.lower():
+            return "Это похоже на вопрос о времени или сроке. Если во входящем нет точной даты, лучше уточнить недостающие детали перед постановкой задачи."
+        if "что" in normalized.lower() or "как" in normalized.lower():
+            return "Похоже, это информационный вопрос. Я сохранил контекст и отметил его как запрос на ответ; при активном AI-провайдере бот вернёт полноценный ответ сразу."
+        return "Похоже, это вопрос. Я распознал его как запрос на ответ и сохранил контекст для дальнейшей работы."

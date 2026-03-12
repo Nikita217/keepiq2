@@ -1,7 +1,5 @@
 ﻿from __future__ import annotations
 
-from datetime import date
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
@@ -20,7 +18,7 @@ class SchedulerService:
 
     def configure(self) -> None:
         self.scheduler.add_job(self.process_due_reminders, "interval", minutes=1, id="due-reminders", replace_existing=True)
-        self.scheduler.add_job(self.process_digests, "interval", minutes=15, id="digests", replace_existing=True)
+        self.scheduler.add_job(self.process_digests, "interval", minutes=1, id="digests", replace_existing=True)
 
     def start(self) -> None:
         self.configure()
@@ -50,8 +48,8 @@ class SchedulerService:
                     continue
                 service = DigestService(session)
                 if digest_settings.morning_enabled and digest_settings.morning_time == current_hm:
-                    digest = await service.build_morning_digest(user.id, date.today())
+                    digest = await service.build_morning_digest(user.id, current.date())
                     await self.notifications.send_digest(user, digest_settings, digest.title, digest.lines)
                 if digest_settings.evening_enabled and digest_settings.evening_time == current_hm:
-                    digest = await service.build_evening_digest(user.id, date.today())
+                    digest = await service.build_evening_digest(user.id, current.date())
                     await self.notifications.send_digest(user, digest_settings, digest.title, digest.lines)

@@ -27,6 +27,8 @@ class IncomingRepository(BaseRepository):
                 selectinload(IncomingItem.attachments),
                 selectinload(IncomingItem.entities),
                 selectinload(IncomingItem.processing_logs),
+                selectinload(IncomingItem.object_links),
+                selectinload(IncomingItem.analysis_results),
             )
         )
         return await self.fetch_one(stmt)
@@ -35,15 +37,30 @@ class IncomingRepository(BaseRepository):
         stmt = (
             select(IncomingItem)
             .where(IncomingItem.user_id == user_id)
-            .order_by(desc(IncomingItem.created_at))
+            .order_by(desc(IncomingItem.needs_confirmation), desc(IncomingItem.created_at))
             .limit(limit)
             .options(
                 selectinload(IncomingItem.attachments),
                 selectinload(IncomingItem.entities),
                 selectinload(IncomingItem.processing_logs),
+                selectinload(IncomingItem.object_links),
+                selectinload(IncomingItem.analysis_results),
             )
         )
         return await self.fetch_all(stmt)
+
+    async def list_object_links(self, incoming_item_id: UUID) -> list[ObjectLink]:
+        stmt = select(ObjectLink).where(ObjectLink.incoming_item_id == incoming_item_id).order_by(ObjectLink.id.asc())
+        return await self.fetch_all(stmt)
+
+    async def get_latest_analysis(self, incoming_item_id: UUID) -> AIAnalysisResult | None:
+        stmt = (
+            select(AIAnalysisResult)
+            .where(AIAnalysisResult.incoming_item_id == incoming_item_id)
+            .order_by(AIAnalysisResult.id.desc())
+            .limit(1)
+        )
+        return await self.fetch_one(stmt)
 
     async def add_attachment(self, attachment: Attachment) -> Attachment:
         self.session.add(attachment)

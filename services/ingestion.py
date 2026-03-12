@@ -1,5 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -10,9 +11,12 @@ from repositories.incoming import IncomingRepository
 from services.analysis import AnalysisService
 from services.object_builder import ObjectBuilderService
 from storage.base import StorageAdapter
+from utils.time import now_local
+from utils.text import compact_text
 
 
-AUTO_CREATE_TYPES = {"task", "reminder", "event", "list", "reply_later"}
+AUTO_CREATE_TYPES = {"task", "reminder", "event", "list", "reply_later", "note", "saved"}
+TEXT_DOCUMENT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml"}
 
 
 class IngestionService:
@@ -45,7 +49,10 @@ class IngestionService:
             incoming_type=incoming_type,
             raw_text=text,
             source_url=text if incoming_type == IncomingType.LINK.value else None,
-            metadata_json={"forwarded": forwarded},
+            metadata_json={
+                "forwarded": forwarded,
+                "source_signature": self._build_text_signature(text),
+            },
             parse_status=ParseStatus.PROCESSING.value,
         )
         await self.repo.create(item)
@@ -66,17 +73,28 @@ class IngestionService:
         filename: str,
         content: bytes,
         content_type: str,
+        raw_text: str | None = None,
         telegram_file_id: str | None = None,
         telegram_unique_file_id: str | None = None,
         metadata: dict | None = None,
+        forwarded: bool = False,
     ) -> IncomingItem:
+        metadata_json = dict(metadata or {})
+        metadata_json["forwarded"] = forwarded
+        metadata_json["source_signature"] = self._build_file_signature(
+            filename=filename,
+            content=content,
+            telegram_unique_file_id=telegram_unique_file_id,
+        )
+
         item = IncomingItem(
             user_id=user_id,
             telegram_chat_id=chat_id,
             telegram_message_id=message_id,
             telegram_update_id=update_id,
             incoming_type=incoming_type,
-            metadata_json=metadata or {},
+            raw_text=raw_text,
+            metadata_json=metadata_json,
             parse_status=ParseStatus.PROCESSING.value,
         )
         await self.repo.create(item)
@@ -88,18 +106,35 @@ class IngestionService:
                 telegram_file_id=telegram_file_id,
                 telegram_unique_file_id=telegram_unique_file_id,
                 file_name=filename,
+                mime_type=content_type,
                 content_type=content_type,
                 local_path=str(saved_path),
                 file_size=len(content),
             )
         )
+        if incoming_type in {IncomingType.DOCUMENT.value, IncomingType.TICKET.value, IncomingType.BOOKING.value}:
+            item.ocr_text = self._extract_document_text(filename=filename, content_type=content_type, content=content)
         await self.repo.add_log(ProcessingLog(incoming_item_id=item.id, stage="storage", message=f"Saved {filename}"))
-        await self._analyze_and_materialize(item, file_path=saved_path)
+        await self._analyze_and_materialize(
+            item,
+            file_path=saved_path,
+            file_name=filename,
+            mime_type=content_type,
+            forwarded=forwarded,
+        )
         await self.session.commit()
         await self.session.refresh(item)
         return item
 
-    async def _analyze_and_materialize(self, item: IncomingItem, *, file_path: Path | None = None, forwarded: bool = False) -> None:
+    async def _analyze_and_materialize(
+        self,
+        item: IncomingItem,
+        *,
+        file_path: Path | None = None,
+        file_name: str | None = None,
+        mime_type: str | None = None,
+        forwarded: bool = False,
+    ) -> None:
         transcript = item.transcript_text
         ocr_text = item.ocr_text
 
@@ -114,22 +149,36 @@ class IngestionService:
             transcript_text=transcript,
             ocr_text=ocr_text,
             file_path=file_path,
+            file_name=file_name,
+            mime_type=mime_type,
+            metadata=item.metadata_json,
             forwarded=forwarded,
         )
         if payload.proposed_type == "saved" and item.source_url:
             domain = urlparse(item.source_url).netloc
             payload.summary = payload.summary or f"Ссылка сохранена: {domain}"
+
+        metadata_json = dict(item.metadata_json or {})
+        metadata_json.update(
+            {
+                "assistant_response": payload.assistant_response,
+                "clarification_question": payload.clarification_question,
+                "analysis_provider": payload.provider,
+            }
+        )
+        item.metadata_json = metadata_json
         item.summary = payload.summary
         item.proposed_type = payload.proposed_type
         item.confidence = payload.confidence
         item.needs_confirmation = payload.needs_confirmation
+        item.processed_at = now_local()
         item.parse_status = ParseStatus.NEEDS_REVIEW.value if payload.needs_confirmation else ParseStatus.CONFIRMED.value
         await self.repo.add_analysis(
             AIAnalysisResult(
                 incoming_item_id=item.id,
                 provider=payload.provider,
                 model=payload.model,
-                prompt_version="v1",
+                prompt_version="v2",
                 summary=payload.summary,
                 proposed_type=payload.proposed_type,
                 confidence=payload.confidence,
@@ -152,7 +201,7 @@ class IngestionService:
             source_text = item.raw_text or transcript or ocr_text or payload.summary
             payload.draft_replies = await self.analysis.provider.generate_reply_drafts(source_text)
         if self._should_materialize(payload):
-            await self.object_builder.materialize(user_id=item.user_id, incoming_item_id=item.id, payload=payload)
+            await self.object_builder.materialize(user_id=item.user_id, incoming_item_id=item.id, payload=payload, upsert=True)
         await self.repo.add_log(
             ProcessingLog(
                 incoming_item_id=item.id,
@@ -162,7 +211,34 @@ class IngestionService:
             )
         )
 
-    def _should_materialize(self, payload) -> bool:
-        if payload.proposed_type in AUTO_CREATE_TYPES and payload.confidence >= 0.75 and not payload.needs_confirmation:
+    def _should_materialize(self, payload: AIAnalysisResult | object) -> bool:
+        if getattr(payload, "proposed_type", None) == "answer":
+            return False
+        if getattr(payload, "needs_confirmation", True):
+            return False
+        if getattr(payload, "proposed_type", None) in AUTO_CREATE_TYPES and getattr(payload, "confidence", 0) >= 0.72:
             return True
-        return payload.confidence >= 0.8 and not payload.needs_confirmation
+        return getattr(payload, "confidence", 0) >= 0.82
+
+    def _extract_document_text(self, *, filename: str, content_type: str, content: bytes) -> str | None:
+        suffix = Path(filename).suffix.lower()
+        if content_type.startswith("text/") or suffix in TEXT_DOCUMENT_EXTENSIONS:
+            try:
+                return compact_text(content.decode("utf-8"))[:4000]
+            except UnicodeDecodeError:
+                try:
+                    return compact_text(content.decode("cp1251"))[:4000]
+                except UnicodeDecodeError:
+                    return None
+        return None
+
+    def _build_text_signature(self, text: str) -> str:
+        return hashlib.sha1(compact_text(text).encode("utf-8")).hexdigest()
+
+    def _build_file_signature(self, *, filename: str, content: bytes, telegram_unique_file_id: str | None) -> str:
+        if telegram_unique_file_id:
+            return telegram_unique_file_id
+        digest = hashlib.sha1()
+        digest.update(filename.encode("utf-8", errors="ignore"))
+        digest.update(content[:2048])
+        return digest.hexdigest()

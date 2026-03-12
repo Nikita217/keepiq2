@@ -26,12 +26,13 @@ def mini_app_reply_keyboard(url: str) -> ReplyKeyboardMarkup:
     )
 
 
-def inbox_actions(item_id: str) -> InlineKeyboardMarkup:
+def inbox_actions(item_id: str, proposed_type: str = "note") -> InlineKeyboardMarkup:
+    confirm_label = "Подтвердить" if proposed_type != "answer" else "Сохранить контекст"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Подтвердить",
+                    text=confirm_label,
                     callback_data=InboxCallback(action="confirm", item_id=item_id).pack(),
                 ),
                 InlineKeyboardButton(

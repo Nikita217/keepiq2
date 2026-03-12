@@ -11,11 +11,11 @@ export function TasksPage({ tasks, refresh }: { tasks: TaskItem[]; refresh: () =
   return (
     <div className="stack">
       {tasks.map((task) => (
-        <Card key={task.id} title={task.title} meta={task.status}>
+        <Card key={task.id} title={task.title} meta={`${task.status}${task.due_at ? ` • due ${new Date(task.due_at).toLocaleString()}` : ""}`}>
           <p>{task.description ?? "Без описания"}</p>
           <div className="actionsRow">
             <button onClick={() => markDone(task.id)}>Готово</button>
-            <button className="ghost">Открыть источник</button>
+            <span className="pill">source: {task.source_incoming_item_id ?? "manual"}</span>
           </div>
         </Card>
       ))}

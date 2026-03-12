@@ -17,6 +17,9 @@ export type IncomingItem = {
   transcript_text: string | null;
   ocr_text: string | null;
   source_url: string | null;
+  assistant_response: string | null;
+  clarification_question: string | null;
+  resolved_object_type: string | null;
   created_at: string;
   entities: Array<{ entity_type: string; value: string; confidence: number | null }>;
 };

@@ -15,9 +15,12 @@ from utils.settings import get_settings
 ANALYSIS_SYSTEM_PROMPT = """
 You classify personal inbox items for a Telegram assistant.
 Return strict JSON with fields:
-summary, proposed_type, confidence, needs_confirmation, extracted_entities, candidates, draft_replies.
-proposed_type must be one of: task, reminder, event, note, list, reply_later, saved.
+summary, proposed_type, confidence, needs_confirmation, extracted_entities, candidates, draft_replies, assistant_response, clarification_question.
+proposed_type must be one of: task, reminder, event, note, list, reply_later, saved, answer.
 Each candidate must contain object_type, title, description, due_at, remind_at, event_at, category_hint, items, metadata.
+If the incoming item is primarily a question or asks for information, use proposed_type="answer" and return a direct assistant_response in the user's language.
+If the item looks like a screenshot of a conversation, decide whether it is reply_later, task, note, or answer based on the actual content.
+Use any supplied filename, mime type, caption, transcript, OCR text, and forwarding signal as context.
 Do not invent missing dates. If uncertain, set needs_confirmation=true and lower confidence.
 """.strip()
 
@@ -39,7 +42,7 @@ class OpenAIProvider(AIProvider):
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
-                {"role": "user", "content": f"hint={hint or ''}\ntext={text}"},
+                {"role": "user", "content": f"hint={hint or ''}\ncontext={text}"},
             ],
         )
         try:
@@ -68,7 +71,7 @@ class OpenAIProvider(AIProvider):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": f"ocr_hint={extracted_text or ''}"},
+                        {"type": "text", "text": f"context={extracted_text or ''}"},
                         {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}},
                     ],
                 },

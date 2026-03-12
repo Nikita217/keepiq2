@@ -28,14 +28,31 @@ async def _ensure_user(message: Message):
 
 
 async def _reply_with_result(message: Message, item) -> None:
+    metadata = item.metadata_json or {}
+    assistant_response = metadata.get("assistant_response")
+    clarification_question = metadata.get("clarification_question")
     summary = item.summary or item.raw_text or item.transcript_text or item.ocr_text or "Сохранено"
-    text = (
-        f"Сохранено во входящие.\n"
-        f"AI думает: {item.proposed_type or 'unknown'}\n"
-        f"Уверенность: {round((item.confidence or 0) * 100)}%\n"
-        f"Кратко: {summary[:220]}"
-    )
-    await message.answer(text, reply_markup=inbox_actions(str(item.id)))
+
+    if item.proposed_type == "answer" and assistant_response:
+        lines = [
+            "AI распознал вопрос и подготовил ответ.",
+            "",
+            assistant_response[:1200],
+        ]
+        if clarification_question:
+            lines.extend(["", f"Если нужно, уточните: {clarification_question}"])
+    else:
+        lines = [
+            "Входящее сохранено.",
+            f"Тип: {item.proposed_type or 'unknown'}",
+            f"Уверенность: {round((item.confidence or 0) * 100)}%",
+            f"Кратко: {summary[:220]}",
+        ]
+        if clarification_question:
+            lines.append(f"Уточнение: {clarification_question}")
+        if not item.needs_confirmation:
+            lines.append("Решение применено автоматически. При необходимости можно переопределить тип ниже.")
+    await message.answer("\n".join(lines), reply_markup=inbox_actions(str(item.id), item.proposed_type or "note"))
 
 
 @router.message(F.text)
@@ -72,9 +89,11 @@ async def handle_voice(message: Message) -> None:
             filename=f"voice-{voice.file_unique_id}.ogg",
             content=content,
             content_type="voice",
+            raw_text=message.caption,
             telegram_file_id=voice.file_id,
             telegram_unique_file_id=voice.file_unique_id,
-            metadata={"duration": voice.duration},
+            metadata={"duration": voice.duration, "caption": message.caption},
+            forwarded=bool(message.forward_origin),
         )
     await _reply_with_result(message, item)
 
@@ -97,9 +116,11 @@ async def handle_audio(message: Message) -> None:
             filename=audio.file_name or f"audio-{audio.file_unique_id}.mp3",
             content=content,
             content_type="audio",
+            raw_text=message.caption,
             telegram_file_id=audio.file_id,
             telegram_unique_file_id=audio.file_unique_id,
-            metadata={"duration": audio.duration, "title": audio.title},
+            metadata={"duration": audio.duration, "title": audio.title, "caption": message.caption},
+            forwarded=bool(message.forward_origin),
         )
     await _reply_with_result(message, item)
 
@@ -111,7 +132,8 @@ async def handle_photo(message: Message) -> None:
     file = await message.bot.get_file(photo.file_id)
     file_bytes = await message.bot.download_file(file.file_path)
     content = file_bytes.read()
-    incoming_type = IncomingType.SCREENSHOT.value if (message.caption or "").lower().find("скрин") >= 0 else IncomingType.PHOTO.value
+    lower_caption = (message.caption or "").lower()
+    incoming_type = IncomingType.SCREENSHOT.value if "скрин" in lower_caption or "screenshot" in lower_caption else IncomingType.PHOTO.value
     async with SessionLocal() as session:
         service = IngestionService(session, provider=provider, storage=storage)
         item = await service.ingest_file(
@@ -123,9 +145,11 @@ async def handle_photo(message: Message) -> None:
             filename=f"photo-{photo.file_unique_id}.jpg",
             content=content,
             content_type="image",
+            raw_text=message.caption,
             telegram_file_id=photo.file_id,
             telegram_unique_file_id=photo.file_unique_id,
             metadata={"caption": message.caption},
+            forwarded=bool(message.forward_origin),
         )
     await _reply_with_result(message, item)
 
@@ -152,8 +176,10 @@ async def handle_document(message: Message) -> None:
             filename=document.file_name or f"document-{document.file_unique_id}",
             content=content,
             content_type=document.mime_type or "document",
+            raw_text=message.caption,
             telegram_file_id=document.file_id,
             telegram_unique_file_id=document.file_unique_id,
             metadata={"caption": message.caption, "mime_type": document.mime_type},
+            forwarded=bool(message.forward_origin),
         )
     await _reply_with_result(message, item)

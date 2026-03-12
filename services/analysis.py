@@ -45,6 +45,9 @@ class AnalysisService:
         transcript_text: str | None = None,
         ocr_text: str | None = None,
         file_path: Path | None = None,
+        file_name: str | None = None,
+        mime_type: str | None = None,
+        metadata: dict | None = None,
         forwarded: bool = False,
     ) -> AnalysisPayload:
         hint = None
@@ -54,9 +57,54 @@ class AnalysisService:
             hint = "forwarded"
         elif incoming_type in {IncomingType.VOICE.value, IncomingType.AUDIO.value}:
             hint = "voice"
+        elif incoming_type in {IncomingType.PHOTO.value, IncomingType.SCREENSHOT.value, IncomingType.IMAGE.value}:
+            hint = "image"
 
-        if incoming_type in {IncomingType.VOICE.value, IncomingType.AUDIO.value} and transcript_text:
-            return await self.analyze_text(transcript_text, hint=hint)
+        context_text = self._compose_context_text(
+            incoming_type=incoming_type,
+            raw_text=raw_text,
+            transcript_text=transcript_text,
+            ocr_text=ocr_text,
+            file_name=file_name,
+            mime_type=mime_type,
+            metadata=metadata,
+            forwarded=forwarded,
+        )
+
         if incoming_type in {IncomingType.PHOTO.value, IncomingType.SCREENSHOT.value, IncomingType.IMAGE.value} and file_path:
-            return await self.analyze_image(file_path, extracted_text=ocr_text)
-        return await self.analyze_text(raw_text or ocr_text or transcript_text or "", hint=hint)
+            return await self.analyze_image(file_path, extracted_text=context_text)
+        return await self.analyze_text(context_text, hint=hint)
+
+    def _compose_context_text(
+        self,
+        *,
+        incoming_type: str,
+        raw_text: str | None,
+        transcript_text: str | None,
+        ocr_text: str | None,
+        file_name: str | None,
+        mime_type: str | None,
+        metadata: dict | None,
+        forwarded: bool,
+    ) -> str:
+        parts: list[str] = [f"type: {incoming_type}"]
+        if forwarded:
+            parts.append("forwarded: yes")
+        if file_name:
+            parts.append(f"filename: {file_name}")
+        if mime_type:
+            parts.append(f"mime: {mime_type}")
+        if metadata:
+            caption = metadata.get("caption")
+            if caption:
+                parts.append(f"caption: {caption}")
+            media_title = metadata.get("title")
+            if media_title:
+                parts.append(f"media_title: {media_title}")
+        if raw_text:
+            parts.append(f"user_text: {raw_text}")
+        if transcript_text:
+            parts.append(f"transcript: {transcript_text}")
+        if ocr_text:
+            parts.append(f"ocr_text: {ocr_text}")
+        return "\n".join(parts)

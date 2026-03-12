@@ -91,5 +91,6 @@ export const api = {
   search: (q: string) => request<{ items: SearchResult[] }>("/search", { method: "POST", body: JSON.stringify({ q }) }),
   digests: () => request<{ morning: { title: string; lines: string[] }; evening: { title: string; lines: string[] } }>("/settings/digests"),
   updateInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  resolveInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}/resolve`, { method: "POST", body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Record<string, unknown>) => request<TaskItem>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
 };
