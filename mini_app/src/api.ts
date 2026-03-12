@@ -1,4 +1,4 @@
-﻿import {
+import {
   DashboardResponse,
   EventItem,
   IncomingItem,
@@ -102,10 +102,21 @@ export const api = {
   lists: () => request<ListEntity[]>("/lists"),
   notes: () => request<{ notes: NoteItem[]; reply_later: ReplyLaterItem[]; saved: SavedItem[] }>("/notes"),
   search: (q: string) => request<{ items: SearchResult[] }>("/search", { method: "POST", body: JSON.stringify({ q }) }),
-  digests: () => request<{ morning: { title: string; lines: string[] }; evening: { title: string; lines: string[] } }>("/settings/digests"),
   updateInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   resolveInbox: (id: string, payload: Record<string, unknown>) => request<IncomingItem>(`/inbox/${id}/resolve`, { method: "POST", body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Record<string, unknown>) => request<TaskItem>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
+  updateEvent: (id: string, payload: Record<string, unknown>) => request<EventItem>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteEvent: (id: string) => request<void>(`/events/${id}`, { method: "DELETE" }),
+  updateReminder: (id: string, payload: Record<string, unknown>) => request<ReminderItem>(`/reminders/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteReminder: (id: string) => request<void>(`/reminders/${id}`, { method: "DELETE" }),
+  updateNote: (id: string, payload: Record<string, unknown>) => request<NoteItem>(`/notes/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteNote: (id: string) => request<void>(`/notes/${id}`, { method: "DELETE" }),
+  updateReplyLater: (id: string, payload: Record<string, unknown>) => request<ReplyLaterItem>(`/notes/reply-later/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteReplyLater: (id: string) => request<void>(`/notes/reply-later/${id}`, { method: "DELETE" }),
+  updateSaved: (id: string, payload: Record<string, unknown>) => request<SavedItem>(`/notes/saved/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSaved: (id: string) => request<void>(`/notes/saved/${id}`, { method: "DELETE" }),
+  updateList: (id: string, payload: Record<string, unknown>) => request<ListEntity>(`/lists/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteList: (id: string) => request<void>(`/lists/${id}`, { method: "DELETE" }),
+  convertObject: (payload: Record<string, unknown>) => request<{ object_type: string; object_id: string }>("/objects/convert", { method: "POST", body: JSON.stringify(payload) }),
 };
-

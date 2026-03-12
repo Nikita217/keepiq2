@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import auth, dashboard, events, inbox, lists, notes, search, settings, tasks
+from api.routes import auth, dashboard, events, inbox, lists, notes, objects, reminders, search, settings, tasks
 from db.bootstrap import create_all
 from db.session import engine
 from utils.logging import configure_logging
@@ -36,8 +36,10 @@ app.include_router(dashboard.router)
 app.include_router(inbox.router)
 app.include_router(tasks.router)
 app.include_router(events.router)
+app.include_router(reminders.router)
 app.include_router(lists.router)
 app.include_router(notes.router)
+app.include_router(objects.router)
 app.include_router(search.router)
 app.include_router(settings.router)
 

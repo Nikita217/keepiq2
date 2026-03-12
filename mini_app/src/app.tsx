@@ -1,107 +1,350 @@
-Ôªøimport { useEffect, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 
 import { api } from "./api";
-import { NavBar, TabKey } from "./components/NavBar";
-import { DashboardPage } from "./pages/DashboardPage";
-import { EventsPage } from "./pages/EventsPage";
-import { InboxPage } from "./pages/InboxPage";
-import { ListsPage } from "./pages/ListsPage";
-import { NotesPage } from "./pages/NotesPage";
-import { SearchPage } from "./pages/SearchPage";
-import { TasksPage } from "./pages/TasksPage";
-import { TodayPage } from "./pages/TodayPage";
+import { BottomNav } from "./components/BottomNav";
+import { DetailSheet } from "./components/DetailSheet";
+import { EmptyState } from "./components/EmptyState";
+import { useKeepIQData } from "./hooks/useKeepIQData";
+import { useTodayOrder } from "./hooks/useTodayOrder";
 import { CalendarPage } from "./pages/CalendarPage";
+import { InboxPage } from "./pages/InboxPage";
+import { LibraryPage } from "./pages/LibraryPage";
+import { SearchPage } from "./pages/SearchPage";
+import { TodayPage } from "./pages/TodayPage";
+import { AppTab, DetailDraft, DetailEntity, IncomingItem } from "./types";
+import { getTelegramFirstName } from "./telegram";
+import { formatDayLabel, mergeDateAndTime, withTime } from "./utils/date";
 import {
-  DashboardResponse,
-  EventItem,
-  IncomingItem,
-  ListEntity,
-  NoteItem,
-  ReminderItem,
-  ReplyLaterItem,
-  SavedItem,
-  SearchResult,
-  TaskItem,
-} from "./types";
+  buildCalendarEntries,
+  buildInboxSummary,
+  buildLibraryItems,
+  buildTodayGroups,
+  canConvert,
+  countOverdue,
+  groupInbox,
+  resolveSearchResult,
+} from "./utils/models";
 
 export function App() {
-  const [tab, setTab] = useState<TabKey>("dashboard");
-  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [inbox, setInbox] = useState<IncomingItem[]>([]);
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [reminders, setReminders] = useState<ReminderItem[]>([]);
-  const [lists, setLists] = useState<ListEntity[]>([]);
-  const [notes, setNotes] = useState<NoteItem[]>([]);
-  const [replyLater, setReplyLater] = useState<ReplyLaterItem[]>([]);
-  const [saved, setSaved] = useState<SavedItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [tab, setTab] = useState<AppTab>("today");
+  const [selectedEntity, setSelectedEntity] = useState<DetailEntity | null>(null);
+  const [arrangeMode, setArrangeMode] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
+  const {
+    dashboard,
+    inbox,
+    tasks,
+    events,
+    reminders,
+    lists,
+    notes,
+    replyLater,
+    saved,
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    isLoading,
+    isRefreshing,
+    error,
+    lastSyncAt,
+    refresh,
+  } = useKeepIQData();
 
-  async function refresh() {
-    setIsLoading(true);
-    setError(null);
+  const todayGroupsBase = useMemo(
+    () => buildTodayGroups(tasks, reminders, events, replyLater, new Map<string, number>()),
+    [tasks, reminders, events, replyLater],
+  );
+  const todayKeys = useMemo(() => todayGroupsBase.flatMap((group) => group.items.map((item) => item.key)), [todayGroupsBase]);
+  const { orderMap, moveUp, moveDown } = useTodayOrder(todayKeys);
+  const todayGroups = useMemo(
+    () => buildTodayGroups(tasks, reminders, events, replyLater, orderMap),
+    [tasks, reminders, events, replyLater, orderMap],
+  );
+  const todayItems = useMemo(() => todayGroups.flatMap((group) => group.items), [todayGroups]);
+  const todayItemsByKey = useMemo(() => new Map(todayItems.map((item) => [item.key, item.detail])), [todayItems]);
+  const calendarEntries = useMemo(() => buildCalendarEntries(tasks, reminders, events, replyLater), [tasks, reminders, events, replyLater]);
+  const libraryItems = useMemo(() => buildLibraryItems(lists, notes, saved), [lists, notes, saved]);
+  const inboxGroups = useMemo(() => groupInbox(inbox), [inbox]);
+  const overdueCount = countOverdue(todayGroups);
+  const pendingInboxCount = buildInboxSummary(inbox);
+  const dayLabel = formatDayLabel(new Date());
+  const userName = getTelegramFirstName();
+  const title = userName ? `${userName}, ‚ÓÚ ‚‡¯ ‰ÂÌ¸` : "¬ÓÚ ‚‡¯ ‰ÂÌ¸";
+  const subtitle = `${dayLabel}. —Ì‡˜‡Î‡ ‚Ò∏, ˜ÚÓ ‚‡ÊÌÓ ÒÂ„Ó‰Ìˇ, ·ÂÁ ‡Á‰ÂÎÂÌËˇ ÔÓ ‚ÌÛÚÂÌÌËÏ ÚËÔ‡Ï.`;
+
+  async function mutate(action: () => Promise<void>) {
+    setIsMutating(true);
     try {
-      const [dashboardData, inboxData, tasksData, eventsData, listsData, notesData] = await Promise.all([
-        api.dashboard(),
-        api.inbox(),
-        api.tasks(),
-        api.events(),
-        api.lists(),
-        api.notes(),
-      ]);
-      setDashboard(dashboardData);
-      setInbox(inboxData);
-      setTasks(tasksData);
-      setEvents(eventsData.events);
-      setReminders(eventsData.reminders);
-      setLists(listsData);
-      setNotes(notesData.notes);
-      setReplyLater(notesData.reply_later);
-      setSaved(notesData.saved);
-      setLastSyncAt(new Date().toLocaleTimeString());
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "–ù–µ–∏–∑–≤–µ—Å—Ç–Ω–∞—è –æ—à–∏–±–∫–∞");
+      await action();
+      await refresh();
+      setSelectedEntity(null);
     } finally {
-      setIsLoading(false);
+      setIsMutating(false);
     }
   }
 
-  useEffect(() => {
-    refresh().catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
+  async function completeEntity(entity: DetailEntity) {
+    if (entity.kind === "task") {
+      await mutate(() => api.updateTask(entity.item.id, { status: "done" }).then(() => undefined));
       return;
     }
-    const timeout = setTimeout(() => {
-      api.search(searchQuery).then((response) => setSearchResults(response.items)).catch((searchError) => {
-        setError(searchError instanceof Error ? searchError.message : "–û—à–∏–±–∫–∞ –ø–æ–∏—Å–∫–∞");
-      });
-    }, 250);
-    return () => clearTimeout(timeout);
-  }, [searchQuery]);
+    if (entity.kind === "reminder") {
+      await mutate(() => api.updateReminder(entity.item.id, { status: "done" }).then(() => undefined));
+      return;
+    }
+    if (entity.kind === "event") {
+      await mutate(() => api.updateEvent(entity.item.id, { status: "done" }).then(() => undefined));
+      return;
+    }
+    if (entity.kind === "reply_later") {
+      await mutate(() => api.updateReplyLater(entity.item.id, { status: "done" }).then(() => undefined));
+    }
+  }
+
+  async function deleteEntity(entity: DetailEntity) {
+    await mutate(async () => {
+      if (entity.kind === "task") {
+        await api.deleteTask(entity.item.id);
+      } else if (entity.kind === "event") {
+        await api.deleteEvent(entity.item.id);
+      } else if (entity.kind === "reminder") {
+        await api.deleteReminder(entity.item.id);
+      } else if (entity.kind === "note") {
+        await api.deleteNote(entity.item.id);
+      } else if (entity.kind === "reply_later") {
+        await api.deleteReplyLater(entity.item.id);
+      } else if (entity.kind === "saved") {
+        await api.deleteSaved(entity.item.id);
+      } else if (entity.kind === "list") {
+        await api.deleteList(entity.item.id);
+      }
+    });
+  }
+
+  async function saveEntity(entity: DetailEntity, draft: DetailDraft) {
+    const normalizedType = draft.type === "saved" ? "save_only" : draft.type;
+    const scheduledAt = mergeDateAndTime(draft.date, draft.time);
+
+    await mutate(async () => {
+      if (entity.kind === "incoming") {
+        if (normalizedType === "inbox_review") {
+          await api.updateInbox(entity.item.id, {
+            summary: draft.title,
+            proposed_type: entity.item.proposed_type,
+            needs_confirmation: true,
+            parse_status: "needs_review",
+          });
+          return;
+        }
+        await api.resolveInbox(entity.item.id, {
+          target_type: normalizedType,
+          title: draft.title,
+          force_confirmation: false,
+        });
+        return;
+      }
+
+      const currentType = entity.kind === "saved" ? "save_only" : entity.kind;
+      if (canConvert(entity.kind) && normalizedType !== currentType) {
+        await api.convertObject({
+          source_type: currentType,
+          source_id: entity.item.id,
+          target_type: normalizedType,
+          title: draft.title,
+          description: draft.description,
+          scheduled_at: scheduledAt,
+          kind: draft.kind,
+          source_url: draft.sourceUrl,
+          list_items: draft.listItems.map((item) => item.text).filter(Boolean),
+        });
+        return;
+      }
+
+      if (entity.kind === "task") {
+        await api.updateTask(entity.item.id, {
+          title: draft.title,
+          description: draft.description || null,
+          due_at: scheduledAt,
+          scheduled_for: scheduledAt,
+          status: scheduledAt ? (entity.item.status === "done" ? "done" : "scheduled") : "active",
+        });
+        return;
+      }
+      if (entity.kind === "event") {
+        await api.updateEvent(entity.item.id, {
+          title: draft.title,
+          description: draft.description || null,
+          starts_at: scheduledAt,
+        });
+        return;
+      }
+      if (entity.kind === "reminder") {
+        await api.updateReminder(entity.item.id, {
+          title: draft.title,
+          remind_at: scheduledAt,
+          remind_on: scheduledAt ? scheduledAt.slice(0, 10) : null,
+        });
+        return;
+      }
+      if (entity.kind === "reply_later") {
+        await api.updateReplyLater(entity.item.id, {
+          title: draft.title,
+          conversation_summary: draft.description || null,
+          reply_due_at: scheduledAt,
+        });
+        return;
+      }
+      if (entity.kind === "note") {
+        await api.updateNote(entity.item.id, {
+          title: draft.title,
+          body: draft.description || null,
+          kind: draft.kind || "note",
+        });
+        return;
+      }
+      if (entity.kind === "saved") {
+        await api.updateSaved(entity.item.id, {
+          title: draft.title,
+          summary: draft.description || null,
+          source_url: draft.sourceUrl || null,
+        });
+        return;
+      }
+      if (entity.kind === "list") {
+        await api.updateList(entity.item.id, {
+          title: draft.title,
+          description: draft.description || null,
+          kind: draft.kind || "general",
+          items: draft.listItems.map((item, index) => ({
+            id: item.id,
+            text: item.text,
+            is_done: item.is_done,
+            sort_order: index,
+          })),
+        });
+      }
+    });
+  }
+
+  async function quickShift(itemKey: string, preset: "evening" | "tomorrow") {
+    const entity = todayItemsByKey.get(itemKey);
+    if (!entity) {
+      return;
+    }
+    const base = new Date();
+    const next = preset === "evening" ? withTime(base, 19, 0) : withTime(new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1), 10, 0);
+
+    await mutate(async () => {
+      if (entity.kind === "task") {
+        await api.updateTask(entity.item.id, { due_at: next, scheduled_for: next, status: "scheduled" });
+      } else if (entity.kind === "reminder") {
+        await api.updateReminder(entity.item.id, { remind_at: next, remind_on: next.slice(0, 10) });
+      } else if (entity.kind === "event") {
+        await api.updateEvent(entity.item.id, { starts_at: next });
+      } else if (entity.kind === "reply_later") {
+        await api.updateReplyLater(entity.item.id, { reply_due_at: next });
+      }
+    });
+  }
+
+  async function resolveInboxItem(item: IncomingItem, targetType: string) {
+    await mutate(async () => {
+      if (targetType === "inbox_review") {
+        await api.updateInbox(item.id, { needs_confirmation: true, parse_status: "needs_review" });
+        return;
+      }
+      await api.resolveInbox(item.id, { target_type: targetType, force_confirmation: false });
+    });
+  }
+
+  function openTodayItem(itemKey: string) {
+    const entity = todayItemsByKey.get(itemKey);
+    if (entity) {
+      setSelectedEntity(entity);
+    }
+  }
+
+  function openSearchResult(index: number) {
+    const result = searchResults[index];
+    if (!result) {
+      return;
+    }
+    const entity = resolveSearchResult(result, { tasks, reminders, events, replyLater, notes, lists, saved, inbox });
+    if (entity) {
+      setSelectedEntity(entity);
+    }
+  }
 
   return (
-    <main className="shell">
-      <NavBar active={tab} onChange={setTab} aside={<button className="ghost" onClick={() => refresh()}>–û–±–Ω–æ–≤–∏—Ç—å</button>} />
-      {error ? <section className="errorBanner">{error}</section> : null}
-      {lastSyncAt ? <p className="syncHint">–ü–æ—Å–ª–µ–¥–Ω—è—è —Å–∏–Ω—Ö—Ä–æ–Ω–∏–∑–∞—Ü–∏—è: {lastSyncAt}</p> : null}
-      {isLoading && !dashboard ? <div className="empty">–ó–∞–≥—Ä—É–∂–∞—é KeepIQ‚Ä¶</div> : null}
-      {tab === "dashboard" ? <DashboardPage data={dashboard} /> : null}
-      {tab === "inbox" ? <InboxPage items={inbox} refresh={refresh} /> : null}
-      {tab === "today" ? <TodayPage tasks={tasks} reminders={reminders} events={events} inbox={inbox} /> : null}
-      {tab === "tasks" ? <TasksPage tasks={tasks} refresh={refresh} /> : null}
-      {tab === "calendar" ? <CalendarPage tasks={tasks} reminders={reminders} events={events} /> : null}
-      {tab === "events" ? <EventsPage events={events} reminders={reminders} /> : null}
-      {tab === "lists" ? <ListsPage lists={lists} /> : null}
-      {tab === "notes" ? <NotesPage notes={notes} replyLater={replyLater} saved={saved} /> : null}
-      {tab === "search" ? <SearchPage query={searchQuery} onQueryChange={setSearchQuery} results={searchResults} /> : null}
+    <main className="appShell">
+      <div className="contentWrap">
+        {error ? <section className="errorBanner">{error}</section> : null}
+        {isLoading ? <EmptyState title="«‡„ÛÊ‡˛ KeepIQ" text="—Ó·Ë‡˛ ‚‡¯Ë Ó·˙ÂÍÚ˚ ‚ ÌÓ‚˚È ËÌÚÂÙÂÈÒ Today-first." /> : null}
+
+        {!isLoading && tab === "today" ? (
+          <TodayPage
+            title={title}
+            subtitle={subtitle}
+            groups={todayGroups}
+            inboxCount={pendingInboxCount}
+            overdueCount={overdueCount}
+            lastSyncAt={lastSyncAt}
+            isRefreshing={isRefreshing}
+            arrangeMode={arrangeMode}
+            onToggleArrange={() => setArrangeMode((current) => !current)}
+            onRefresh={() => refresh()}
+            onOpenItem={openTodayItem}
+            onCompleteItem={(itemKey) => {
+              const entity = todayItemsByKey.get(itemKey);
+              if (entity) {
+                completeEntity(entity).catch(console.error);
+              }
+            }}
+            onQuickShift={(itemKey, preset) => quickShift(itemKey, preset).catch(console.error)}
+            onMoveUp={moveUp}
+            onMoveDown={moveDown}
+          />
+        ) : null}
+
+        {!isLoading && tab === "inbox" ? (
+          <InboxPage
+            urgent={inboxGroups.urgent}
+            quiet={inboxGroups.quiet}
+            onOpen={(item) => setSelectedEntity({ kind: "incoming", item })}
+            onResolve={(item, targetType) => resolveInboxItem(item, targetType).catch(console.error)}
+          />
+        ) : null}
+
+        {!isLoading && tab === "calendar" ? (
+          <CalendarPage entries={calendarEntries} onOpen={(entry) => setSelectedEntity(entry.detail)} />
+        ) : null}
+
+        {!isLoading && tab === "library" ? (
+          <LibraryPage items={libraryItems} onOpen={(item) => setSelectedEntity(item.detail)} />
+        ) : null}
+
+        {!isLoading && tab === "search" ? (
+          <SearchPage
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            results={searchResults}
+            onOpen={(result) => {
+              const index = searchResults.findIndex((item) => item.object_id === result.object_id && item.object_type === result.object_type);
+              openSearchResult(index);
+            }}
+          />
+        ) : null}
+      </div>
+
+      <BottomNav active={tab} inboxCount={pendingInboxCount} onChange={(nextTab) => startTransition(() => setTab(nextTab))} />
+      <DetailSheet
+        entity={selectedEntity}
+        busy={isMutating}
+        onClose={() => setSelectedEntity(null)}
+        onSave={(entity, draft) => saveEntity(entity, draft).catch(console.error)}
+        onDelete={(entity) => deleteEntity(entity).catch(console.error)}
+        onComplete={(entity) => completeEntity(entity).catch(console.error)}
+      />
     </main>
   );
 }

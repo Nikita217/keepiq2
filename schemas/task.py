@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID
@@ -15,6 +15,8 @@ class TaskRead(BaseModel):
     scheduled_for: datetime | None = None
     priority: str
     source_incoming_item_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class TaskUpdateRequest(BaseModel):

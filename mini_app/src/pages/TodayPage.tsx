@@ -1,21 +1,87 @@
-п»їimport { Card } from "../components/Card";
-import { EventItem, IncomingItem, ReminderItem, TaskItem } from "../types";
+import { EmptyState } from "../components/EmptyState";
+import { PlannerItemCard } from "../components/PlannerItemCard";
+import { ScreenHeader } from "../components/ScreenHeader";
+import { TodayGroup } from "../types";
 
-export function TodayPage({ tasks, reminders, events, inbox }: { tasks: TaskItem[]; reminders: ReminderItem[]; events: EventItem[]; inbox: IncomingItem[] }) {
+export function TodayPage({
+  title,
+  subtitle,
+  groups,
+  inboxCount,
+  overdueCount,
+  lastSyncAt,
+  isRefreshing,
+  arrangeMode,
+  onToggleArrange,
+  onRefresh,
+  onOpenItem,
+  onCompleteItem,
+  onQuickShift,
+  onMoveUp,
+  onMoveDown,
+}: {
+  title: string;
+  subtitle: string;
+  groups: TodayGroup[];
+  inboxCount: number;
+  overdueCount: number;
+  lastSyncAt: string | null;
+  isRefreshing: boolean;
+  arrangeMode: boolean;
+  onToggleArrange: () => void;
+  onRefresh: () => void;
+  onOpenItem: (itemKey: string) => void;
+  onCompleteItem: (itemKey: string) => void;
+  onQuickShift: (itemKey: string, preset: "evening" | "tomorrow") => void;
+  onMoveUp: (itemKey: string) => void;
+  onMoveDown: (itemKey: string) => void;
+}) {
   return (
-    <div className="pageGrid">
-      <Card title="Р—Р°РґР°С‡Рё" meta="С‡С‚Рѕ РЅСѓР¶РЅРѕ РґРѕРІРµСЃС‚Рё СЃРµРіРѕРґРЅСЏ">
-        <ul className="listClean">{tasks.slice(0, 8).map((task) => <li key={task.id}>{task.title} вЂў {task.status}</li>)}</ul>
-      </Card>
-      <Card title="РќР°РїРѕРјРёРЅР°РЅРёСЏ" meta="С‡С‚Рѕ РІСЃРїР»С‹РІС‘С‚ СЃРµРіРѕРґРЅСЏ">
-        <ul className="listClean">{reminders.slice(0, 8).map((reminder) => <li key={reminder.id}>{reminder.title}</li>)}</ul>
-      </Card>
-      <Card title="РЎРѕР±С‹С‚РёСЏ" meta="РїСЂРёРІСЏР·Р°РЅРѕ РєРѕ РІСЂРµРјРµРЅРё">
-        <ul className="listClean">{events.slice(0, 8).map((event) => <li key={event.id}>{event.title} {event.starts_at ? `вЂў ${new Date(event.starts_at).toLocaleString()}` : ""}</li>)}</ul>
-      </Card>
-      <Card title="РўСЂРµР±СѓСЋС‚ РІРЅРёРјР°РЅРёСЏ" meta="РІС…РѕРґСЏС‰РёРµ Рё РѕС‚Р»РѕР¶РµРЅРЅС‹Рµ СЂРµС€РµРЅРёСЏ">
-        <ul className="listClean">{inbox.filter((item) => item.needs_confirmation).slice(0, 8).map((item) => <li key={item.id}>{item.summary ?? item.proposed_type}</li>)}</ul>
-      </Card>
+    <div className="screenStack">
+      <ScreenHeader
+        eyebrow="Сегодня"
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <div className="headerButtonRow">
+            <button type="button" className={arrangeMode ? "ghost activeGhost" : "ghost"} onClick={onToggleArrange}>Порядок</button>
+            <button type="button" className="ghost" onClick={onRefresh}>{isRefreshing ? "Обновляю..." : "Обновить"}</button>
+          </div>
+        }
+        metrics={
+          <>
+            <span className="metricPill"><strong>{groups.reduce((sum, group) => sum + group.items.length, 0)}</strong> в фокусе</span>
+            <span className="metricPill"><strong>{inboxCount}</strong> во входящих</span>
+            <span className="metricPill alert"><strong>{overdueCount}</strong> просрочено</span>
+            {lastSyncAt ? <span className="metricPill subtle">синхронизировано {lastSyncAt}</span> : null}
+          </>
+        }
+      />
+
+      {groups.length === 0 ? <EmptyState title="На сегодня всё чисто" text="Здесь появятся дела, события, напоминания и отложенные ответы, которые требуют внимания сегодня." /> : null}
+
+      {groups.map((group) => (
+        <section key={group.key} className="sectionBlock">
+          <div className="sectionHead">
+            <h2>{group.label}</h2>
+            <span>{group.items.length}</span>
+          </div>
+          <div className="plannerList">
+            {group.items.map((item) => (
+              <PlannerItemCard
+                key={item.key}
+                item={item}
+                arrangeMode={arrangeMode}
+                onOpen={() => onOpenItem(item.key)}
+                onComplete={() => onCompleteItem(item.key)}
+                onMoveUp={() => onMoveUp(item.key)}
+                onMoveDown={() => onMoveDown(item.key)}
+                onQuickShift={(preset) => onQuickShift(item.key, preset)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

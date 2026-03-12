@@ -1,4 +1,4 @@
-﻿declare global {
+declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
@@ -27,6 +27,10 @@ export function getInitData(): string | null {
 
 export function getTelegramUserId(): number | null {
   return getWebApp()?.initDataUnsafe?.user?.id ?? null;
+}
+
+export function getTelegramFirstName(): string | null {
+  return getWebApp()?.initDataUnsafe?.user?.first_name ?? null;
 }
 
 export function isInsideTelegram(): boolean {

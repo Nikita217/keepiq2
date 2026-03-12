@@ -1,9 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Note, ReplyLaterItem, SavedItem
+from models.enums import NoteStatus
 from repositories.base import BaseRepository
 
 
@@ -27,14 +28,21 @@ class NoteRepository(BaseRepository):
         return saved_item
 
     async def list_notes(self, user_id: int, limit: int = 50) -> list[Note]:
-        stmt = select(Note).where(Note.user_id == user_id).order_by(desc(Note.created_at)).limit(limit)
+        stmt = (
+            select(Note)
+            .where(Note.user_id == user_id)
+            .where(Note.status == NoteStatus.ACTIVE.value)
+            .order_by(desc(Note.updated_at), desc(Note.created_at))
+            .limit(limit)
+        )
         return await self.fetch_all(stmt)
 
     async def list_reply_later(self, user_id: int, limit: int = 50) -> list[ReplyLaterItem]:
         stmt = (
             select(ReplyLaterItem)
             .where(ReplyLaterItem.user_id == user_id)
-            .order_by(desc(ReplyLaterItem.created_at))
+            .where(ReplyLaterItem.status == "open")
+            .order_by(desc(ReplyLaterItem.updated_at), desc(ReplyLaterItem.created_at))
             .limit(limit)
         )
         return await self.fetch_all(stmt)
@@ -43,7 +51,7 @@ class NoteRepository(BaseRepository):
         stmt = (
             select(SavedItem)
             .where(SavedItem.user_id == user_id)
-            .order_by(desc(SavedItem.created_at))
+            .order_by(desc(SavedItem.updated_at), desc(SavedItem.created_at))
             .limit(limit)
         )
         return await self.fetch_all(stmt)

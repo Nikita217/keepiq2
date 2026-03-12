@@ -1,37 +1,58 @@
-п»їimport { api } from "../api";
-import { Card } from "../components/Card";
+import { EmptyState } from "../components/EmptyState";
+import { InboxCard } from "../components/InboxCard";
+import { ScreenHeader } from "../components/ScreenHeader";
 import { IncomingItem } from "../types";
 
-export function InboxPage({ items, refresh }: { items: IncomingItem[]; refresh: () => void }) {
-  async function applySuggestion(id: string, suggestedActionId: number) {
-    await api.resolveInbox(id, { suggested_action_id: suggestedActionId });
-    refresh();
-  }
-
+export function InboxPage({
+  urgent,
+  quiet,
+  onOpen,
+  onResolve,
+}: {
+  urgent: IncomingItem[];
+  quiet: IncomingItem[];
+  onOpen: (item: IncomingItem) => void;
+  onResolve: (item: IncomingItem, targetType: string) => void;
+}) {
   return (
-    <div className="stack">
-      {items.map((item) => (
-        <Card
-          key={item.id}
-          title={item.summary ?? item.proposed_type ?? "Р’С…РѕРґСЏС‰РµРµ"}
-          meta={item.resolved_object_type ?? item.proposed_type ?? "Р¶РґС‘С‚ СЂРµС€РµРЅРёСЏ"}
-        >
-          <p>{item.assistant_response ?? item.raw_text ?? item.transcript_text ?? item.ocr_text ?? "РћСЂРёРіРёРЅР°Р» СЃРѕС…СЂР°РЅС‘РЅ РІРѕ РІР»РѕР¶РµРЅРёСЏС…"}</p>
-          {item.clarification_question ? <p><strong>РЈС‚РѕС‡РЅРµРЅРёРµ:</strong> {item.clarification_question}</p> : null}
-          <div className="pillRow">
-            {item.entities.map((entity) => <span key={`${item.id}-${entity.entity_type}-${entity.value}`} className="pill">{entity.entity_type}: {entity.value}</span>)}
+    <div className="screenStack">
+      <ScreenHeader
+        eyebrow="Входящие"
+        title="Спокойный разбор"
+        subtitle="Здесь лежит всё новое, неуверенное и требующее подтверждения. Ничего не мешает экрану Сегодня, пока вы сами не решите, что с этим делать."
+        metrics={
+          <>
+            <span className="metricPill alert"><strong>{urgent.length}</strong> требуют решения</span>
+            <span className="metricPill"><strong>{quiet.length}</strong> можно разобрать позже</span>
+          </>
+        }
+      />
+
+      {urgent.length === 0 && quiet.length === 0 ? <EmptyState title="Входящие пусты" text="Новые сообщения, голосовые, фото и ссылки появятся здесь до подтверждения." /> : null}
+
+      {urgent.length ? (
+        <section className="sectionBlock">
+          <div className="sectionHead">
+            <h2>Сначала разберите это</h2>
+            <span>{urgent.length}</span>
           </div>
-          {item.suggested_actions.length ? (
-            <div className="actionsRow wrapRow">
-              {item.suggested_actions.map((action, index) => (
-                <button key={`${item.id}-${action.label}-${index}`} className={index === 0 ? "" : "ghost"} onClick={() => applySuggestion(item.id, index)}>
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </Card>
-      ))}
+          <div className="cardList">
+            {urgent.map((item) => <InboxCard key={item.id} item={item} onOpen={() => onOpen(item)} onResolve={(targetType) => onResolve(item, targetType)} />)}
+          </div>
+        </section>
+      ) : null}
+
+      {quiet.length ? (
+        <section className="sectionBlock">
+          <div className="sectionHead">
+            <h2>Можно оставить во входящих</h2>
+            <span>{quiet.length}</span>
+          </div>
+          <div className="cardList">
+            {quiet.map((item) => <InboxCard key={item.id} item={item} onOpen={() => onOpen(item)} onResolve={(targetType) => onResolve(item, targetType)} />)}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
