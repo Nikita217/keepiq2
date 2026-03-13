@@ -7,11 +7,11 @@ type BottomNavProps = {
 };
 
 const TABS: Array<{ key: AppTab; label: string; icon: string }> = [
-  { key: "today", label: "\u0421\u0435\u0433\u043e\u0434\u043d\u044f", icon: "today" },
-  { key: "inbox", label: "\u0412\u0445\u043e\u0434\u044f\u0449\u0438\u0435", icon: "inbox" },
-  { key: "calendar", label: "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", icon: "calendar" },
-  { key: "library", label: "\u0421\u043f\u0438\u0441\u043a\u0438", icon: "library" },
-  { key: "search", label: "\u041f\u043e\u0438\u0441\u043a", icon: "search" },
+  { key: "today", label: "Сегодня", icon: "today" },
+  { key: "inbox", label: "Входящие", icon: "inbox" },
+  { key: "calendar", label: "Календарь", icon: "calendar" },
+  { key: "library", label: "Списки", icon: "library" },
+  { key: "search", label: "Поиск", icon: "search" },
 ];
 
 function Icon({ name }: { name: string }) {
@@ -32,7 +32,7 @@ function Icon({ name }: { name: string }) {
 
 export function BottomNav({ active, inboxCount, onChange }: BottomNavProps) {
   return (
-    <nav className="bottomNav" aria-label="\u041e\u0441\u043d\u043e\u0432\u043d\u0430\u044f \u043d\u0430\u0432\u0438\u0433\u0430\u0446\u0438\u044f">
+    <nav className="bottomNav" aria-label="Основная навигация">
       {TABS.map((tab) => (
         <button key={tab.key} type="button" className={tab.key === active ? "tabButton active" : "tabButton"} onClick={() => onChange(tab.key)}>
           <span className="tabIconWrap">
