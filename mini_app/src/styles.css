@@ -639,8 +639,10 @@ svg {
   padding: 1rem;
   border-radius: 30px 30px 24px 24px;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.9rem;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -669,9 +671,12 @@ svg {
 .sheetScrollArea {
   min-height: 0;
   display: grid;
+  align-content: start;
   gap: 0.9rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding-right: 0.1rem;
 }
 
@@ -741,6 +746,11 @@ svg {
     padding-inline: 0.8rem;
   }
 
+  .sheetOverlay {
+    padding: 0;
+    align-items: stretch;
+  }
+
   .screenHeader h1,
   .sheetHeader h2 {
     font-size: clamp(1.7rem, 9vw, 2.4rem);
@@ -783,9 +793,14 @@ svg {
   }
 
   .sheetCard {
-    max-height: min(90dvh, calc(100dvh - 0.75rem - env(safe-area-inset-bottom)));
-    padding: 0.9rem;
-    border-radius: 24px 24px 20px 20px;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding:
+      max(0.9rem, calc(env(safe-area-inset-top) + 0.4rem))
+      0.9rem
+      max(0.9rem, calc(env(safe-area-inset-bottom) + 0.4rem));
+    border-radius: 0;
   }
 
   .sheetDateRow {
