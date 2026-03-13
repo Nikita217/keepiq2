@@ -95,8 +95,13 @@ svg {
 
 .contentWrap {
   width: min(100%, 840px);
+  max-width: 100vw;
   margin: 0 auto;
-  padding: 1.25rem 1rem calc(7.5rem + env(safe-area-inset-bottom));
+  padding:
+    1.25rem
+    max(0.9rem, calc(env(safe-area-inset-right) + 0.6rem))
+    calc(7.75rem + env(safe-area-inset-bottom))
+    max(0.9rem, calc(env(safe-area-inset-left) + 0.6rem));
 }
 
 .screenStack {
@@ -232,6 +237,7 @@ svg {
   border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
 .errorBanner,
@@ -353,6 +359,8 @@ svg {
   align-self: start;
   width: 2.5rem;
   height: 2.5rem;
+  display: grid;
+  place-items: center;
   padding: 0;
   border-radius: 999px;
   background: rgba(30, 118, 100, 0.1);
@@ -366,6 +374,26 @@ svg {
   margin: 0 auto;
   border-radius: 999px;
   border: 2px solid currentColor;
+}
+
+.plannerCheck.checked {
+  background: var(--green);
+  color: #fff;
+}
+
+.plannerCheck.checked span {
+  background: currentColor;
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.94);
+}
+
+.completedCard {
+  opacity: 0.84;
+}
+
+.plannerBody.completed strong {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
 }
 
 .plannerBody,
@@ -537,9 +565,10 @@ svg {
 .bottomNav {
   position: fixed;
   left: 50%;
-  bottom: calc(0.85rem + env(safe-area-inset-bottom));
+  bottom: calc(0.65rem + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  width: min(760px, calc(100vw - 1rem));
+  width: min(760px, calc(100vw - 0.5rem));
+  max-width: calc(100vw - 0.5rem);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.45rem;
@@ -549,15 +578,25 @@ svg {
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 40px rgba(24, 34, 31, 0.16);
   backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
 .tabButton {
   display: grid;
   justify-items: center;
-  gap: 0.32rem;
-  padding: 0.6rem 0.2rem;
+  gap: 0.28rem;
+  min-width: 0;
+  padding: 0.62rem 0.18rem;
   border-radius: 20px;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+}
+
+.tabLabel {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.08;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .tabIconWrap {
@@ -584,18 +623,25 @@ svg {
   background: rgba(24, 34, 31, 0.28);
   display: grid;
   align-items: end;
-  padding: 1rem;
+  padding:
+    1rem
+    max(0.9rem, calc(env(safe-area-inset-right) + 0.6rem))
+    calc(1rem + env(safe-area-inset-bottom))
+    max(0.9rem, calc(env(safe-area-inset-left) + 0.6rem));
+  overflow: hidden;
   z-index: 20;
 }
 
 .sheetCard {
   width: min(820px, 100%);
+  max-height: min(88dvh, calc(100dvh - 1.5rem - env(safe-area-inset-bottom)));
   margin: 0 auto;
   padding: 1rem;
   border-radius: 30px 30px 24px 24px;
   display: grid;
   gap: 0.9rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .sheetHeader,
@@ -606,9 +652,33 @@ svg {
   justify-content: space-between;
 }
 
+.sheetDateRow {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.sheetHeader {
+  align-items: flex-start;
+}
+
+.sheetHeader > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.sheetScrollArea {
+  min-height: 0;
+  display: grid;
+  gap: 0.9rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.1rem;
+}
+
 .fieldBlock {
   display: grid;
   gap: 0.45rem;
+  min-width: 0;
 }
 
 .fieldBlock span {
@@ -619,7 +689,8 @@ svg {
 }
 
 .compactField {
-  flex: 1;
+  flex: 1 1 11rem;
+  min-width: 0;
 }
 
 .listEditorRow {
@@ -632,6 +703,33 @@ svg {
 .sheetFooter {
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--line);
+}
+
+.sheetFooterSpacer {
+  flex: 1 1 auto;
+}
+
+.sheetFooterActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.clearDateButton {
+  align-self: end;
+}
+
+.sheetInfoTitle {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.sheetInfo {
+  overflow-wrap: anywhere;
 }
 
 .danger {
@@ -676,7 +774,27 @@ svg {
 
   .tabButton {
     min-width: 0;
-    padding-inline: 0.1rem;
+    padding-inline: 0.08rem;
+    font-size: 0.68rem;
+  }
+
+  .tabLabel {
+    font-size: 0.66rem;
+  }
+
+  .sheetCard {
+    max-height: min(90dvh, calc(100dvh - 0.75rem - env(safe-area-inset-bottom)));
+    padding: 0.9rem;
+    border-radius: 24px 24px 20px 20px;
+  }
+
+  .sheetDateRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .clearDateButton {
+    align-self: stretch;
   }
 }
 

@@ -17,19 +17,19 @@ export function SearchPage({
   return (
     <div className="screenStack">
       <ScreenHeader
-        eyebrow="Поиск"
-        title="Найти старое за секунды"
-        subtitle="Поиск становится главным инструментом по мере роста личной памяти: билеты, идеи, списки, заметки, напоминания и старые входящие находятся из одного поля."
-        metrics={<span className="metricPill"><strong>{results.length}</strong> результатов</span>}
+        eyebrow="\u041f\u043e\u0438\u0441\u043a"
+        title="\u041d\u0430\u0439\u0442\u0438 \u0441\u0442\u0430\u0440\u043e\u0435 \u0437\u0430 \u0441\u0435\u043a\u0443\u043d\u0434\u044b"
+        subtitle="\u041a\u043e\u0433\u0434\u0430 \u043b\u0438\u0447\u043d\u0430\u044f \u043f\u0430\u043c\u044f\u0442\u044c \u0440\u0430\u0441\u0442\u0451\u0442, \u043f\u043e\u0438\u0441\u043a \u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0441\u044f \u043e\u0441\u043d\u043e\u0432\u043d\u044b\u043c \u0441\u043f\u043e\u0441\u043e\u0431\u043e\u043c \u043d\u0430\u0439\u0442\u0438 \u0431\u0438\u043b\u0435\u0442, \u0438\u0434\u0435\u044e, \u0437\u0430\u043c\u0435\u0442\u043a\u0443, \u0441\u043f\u0438\u0441\u043e\u043a \u0438\u043b\u0438 \u0441\u0442\u0430\u0440\u043e\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435."
+        metrics={<span className="metricPill"><strong>{results.length}</strong> \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u043e\u0432</span>}
       />
 
       <label className="heroSearch">
-        <span>Что ищем?</span>
-        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="билет в театр, идея для отпуска, корм для кота" />
+        <span>\u0427\u0442\u043e \u0438\u0449\u0435\u043c?</span>
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="\u0431\u0438\u043b\u0435\u0442 \u0432 \u0442\u0435\u0430\u0442\u0440, \u0438\u0434\u0435\u044f \u0434\u043b\u044f \u043e\u0442\u043f\u0443\u0441\u043a\u0430, \u043a\u043e\u0440\u043c \u0434\u043b\u044f \u043a\u043e\u0442\u0430" />
       </label>
 
-      {!query.trim() ? <EmptyState title="Начните поиск" text="Ищите по смыслу, фразе, человеку, месту, ссылке или фрагменту заметки." /> : null}
-      {query.trim() && results.length === 0 ? <EmptyState title="Ничего не нашлось" text="Попробуйте переформулировать запрос короче или по смыслу." /> : null}
+      {!query.trim() ? <EmptyState title="\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u043e\u0438\u0441\u043a" text="\u0418\u0449\u0438\u0442\u0435 \u043f\u043e \u0441\u043c\u044b\u0441\u043b\u0443, \u0444\u0440\u0430\u0437\u0435, \u0447\u0435\u043b\u043e\u0432\u0435\u043a\u0443, \u043c\u0435\u0441\u0442\u0443, \u0441\u0441\u044b\u043b\u043a\u0435 \u0438\u043b\u0438 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0443 \u0437\u0430\u043c\u0435\u0442\u043a\u0438." /> : null}
+      {query.trim() && results.length === 0 ? <EmptyState title="\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0448\u043b\u043e\u0441\u044c" text="\u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u0435\u0440\u0435\u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0437\u0430\u043f\u0440\u043e\u0441 \u043a\u043e\u0440\u043e\u0447\u0435 \u0438\u043b\u0438 \u043f\u043e \u0441\u043c\u044b\u0441\u043b\u0443." /> : null}
 
       <div className="cardList">
         {results.map((result) => (

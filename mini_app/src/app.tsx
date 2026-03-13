@@ -16,6 +16,7 @@ import { getTelegramFirstName } from "./telegram";
 import { formatDayLabel, mergeDateAndTime, withTime } from "./utils/date";
 import {
   buildCalendarEntries,
+  buildCompletedTodayGroup,
   buildInboxSummary,
   buildLibraryItems,
   buildTodayGroups,
@@ -43,9 +44,7 @@ export function App() {
     setSearchQuery,
     searchResults,
     isLoading,
-    isRefreshing,
     error,
-    lastSyncAt,
     refresh,
   } = useKeepIQData();
 
@@ -59,7 +58,14 @@ export function App() {
     () => buildTodayGroups(tasks, reminders, events, replyLater, orderMap),
     [tasks, reminders, events, replyLater, orderMap],
   );
-  const todayItems = useMemo(() => todayGroups.flatMap((group) => group.items), [todayGroups]);
+  const completedTodayGroup = useMemo(
+    () => buildCompletedTodayGroup(tasks, reminders, events, replyLater),
+    [tasks, reminders, events, replyLater],
+  );
+  const todayItems = useMemo(
+    () => [...todayGroups, ...(completedTodayGroup ? [completedTodayGroup] : [])].flatMap((group) => group.items),
+    [todayGroups, completedTodayGroup],
+  );
   const todayItemsByKey = useMemo(() => new Map(todayItems.map((item) => [item.key, item.detail])), [todayItems]);
   const calendarEntries = useMemo(() => buildCalendarEntries(tasks, reminders, events, replyLater), [tasks, reminders, events, replyLater]);
   const libraryItems = useMemo(() => buildLibraryItems(lists, notes, saved), [lists, notes, saved]);
@@ -68,8 +74,8 @@ export function App() {
   const pendingInboxCount = buildInboxSummary(inbox);
   const dayLabel = formatDayLabel(new Date());
   const userName = getTelegramFirstName();
-  const title = userName ? `${userName}, вот ваш день` : "Вот ваш день";
-  const subtitle = `${dayLabel}. Сначала всё, что важно сегодня, без разделения по внутренним типам.`;
+  const title = userName ? `${userName}, \u0432\u043e\u0442 \u0432\u0430\u0448 \u0434\u0435\u043d\u044c` : "\u0412\u043e\u0442 \u0432\u0430\u0448 \u0434\u0435\u043d\u044c";
+  const subtitle = `${dayLabel}. \u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0432\u0441\u0451, \u0447\u0442\u043e \u0432\u0430\u0436\u043d\u043e \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f, \u0430 \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0435 \u0438 \u0432\u0445\u043e\u0434\u044f\u0449\u0435\u0435 \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u043f\u043e\u0434 \u0440\u0443\u043a\u043e\u0439, \u043d\u043e \u043d\u0435 \u043c\u0435\u0448\u0430\u044e\u0442.`;
 
   async function mutate(action: () => Promise<void>) {
     setIsMutating(true);
@@ -278,20 +284,18 @@ export function App() {
     <main className="appShell">
       <div className="contentWrap">
         {error ? <section className="errorBanner">{error}</section> : null}
-        {isLoading ? <EmptyState title="Загружаю KeepIQ" text="Собираю ваши объекты в новый интерфейс Today-first." /> : null}
+        {isLoading ? <EmptyState title="\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u044e KeepIQ" text="\u0421\u043e\u0431\u0438\u0440\u0430\u044e \u0432\u0430\u0448\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u044b \u0432 \u043d\u043e\u0432\u044b\u0439 today-first \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441." /> : null}
 
         {!isLoading && tab === "today" ? (
           <TodayPage
             title={title}
             subtitle={subtitle}
             groups={todayGroups}
+            completedGroup={completedTodayGroup}
             inboxCount={pendingInboxCount}
             overdueCount={overdueCount}
-            lastSyncAt={lastSyncAt}
-            isRefreshing={isRefreshing}
             arrangeMode={arrangeMode}
             onToggleArrange={() => setArrangeMode((current) => !current)}
-            onRefresh={() => refresh()}
             onOpenItem={openTodayItem}
             onCompleteItem={(itemKey) => {
               const entity = todayItemsByKey.get(itemKey);

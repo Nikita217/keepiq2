@@ -157,10 +157,11 @@ export type FocusCardItem = {
   badge: string;
   detail: DetailEntity;
   isOverdue: boolean;
+  isCompleted: boolean;
 };
 
 export type TodayGroup = {
-  key: "overdue" | "morning" | "day" | "evening" | "anytime";
+  key: "overdue" | "morning" | "day" | "evening" | "anytime" | "completed";
   label: string;
   items: FocusCardItem[];
 };
