@@ -1,4 +1,4 @@
-import {
+﻿import {
   CalendarEntry,
   DetailEntity,
   EventItem,
@@ -51,15 +51,15 @@ function getUpdatedAt(detail: DetailEntity): string | null {
 
 export function getTypeLabel(kind: string): string {
   return {
-    task: "Дело",
-    reminder: "Напоминание",
-    event: "Событие",
-    reply_later: "Ответить",
-    note: "Заметка",
-    list: "Список",
-    saved: "Сохранённое",
-    incoming: "Входящее",
-    save_only: "Сохранённое",
+    task: "РќР°РїРѕРјРёРЅР°РЅРёРµ",
+    reminder: "РќР°РїРѕРјРёРЅР°РЅРёРµ",
+    event: "РЎРѕР±С‹С‚РёРµ",
+    reply_later: "РќР°РїРѕРјРёРЅР°РЅРёРµ",
+    note: "Р—Р°РјРµС‚РєР°",
+    list: "РЎРїРёСЃРѕРє",
+    saved: "Р—Р°РјРµС‚РєР°",
+    incoming: "Р’С…РѕРґСЏС‰РµРµ",
+    save_only: "Р—Р°РјРµС‚РєР°",
   }[kind] ?? kind;
 }
 
@@ -155,11 +155,11 @@ export function buildTodayGroups(
   ];
 
   const groups: TodayGroup[] = [
-    { key: "overdue", label: "Просрочено", items: [] },
-    { key: "morning", label: "Утро", items: [] },
-    { key: "day", label: "День", items: [] },
-    { key: "evening", label: "Вечер", items: [] },
-    { key: "anytime", label: "Без времени", items: [] },
+    { key: "overdue", label: "РџСЂРѕСЃСЂРѕС‡РµРЅРѕ", items: [] },
+    { key: "morning", label: "РЈС‚СЂРѕ", items: [] },
+    { key: "day", label: "Р”РµРЅСЊ", items: [] },
+    { key: "evening", label: "Р’РµС‡РµСЂ", items: [] },
+    { key: "anytime", label: "Р‘РµР· РІСЂРµРјРµРЅРё", items: [] },
   ];
 
   const sorted = [...items].sort((left, right) => {
@@ -266,7 +266,7 @@ export function buildCompletedTodayGroup(
 
   return {
     key: "completed",
-    label: "Выполнено сегодня",
+    label: "Р’С‹РїРѕР»РЅРµРЅРѕ СЃРµРіРѕРґРЅСЏ",
     items: completedItems,
   };
 }
@@ -339,8 +339,8 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
       filterKind: "list",
       title: list.title,
       preview: list.description,
-      meta: `${list.items.length} пунктов`,
-      progress: list.items.length ? `${done}/${list.items.length} выполнено` : null,
+      meta: `${list.items.length} РїСѓРЅРєС‚РѕРІ`,
+      progress: list.items.length ? `${done}/${list.items.length} РІС‹РїРѕР»РЅРµРЅРѕ` : null,
       tags: [list.kind],
       updated_at: list.updated_at,
       detail: { kind: "list", item: list },
@@ -353,7 +353,7 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
     filterKind: note.kind === "idea" ? "idea" : "note",
     title: note.title,
     preview: note.body,
-    meta: note.kind === "idea" ? "Идея" : "Заметка",
+    meta: note.kind === "idea" ? "РРґРµСЏ" : "Р—Р°РјРµС‚РєР°",
     progress: null,
     tags: [note.kind],
     updated_at: note.updated_at,
@@ -366,7 +366,7 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
     filterKind: "saved",
     title: item.title,
     preview: item.summary ?? item.source_url,
-    meta: item.source_url ? "Ссылка и материал" : "Сохранённый материал",
+    meta: item.source_url ? "РЎСЃС‹Р»РєР° Рё РјР°С‚РµСЂРёР°Р»" : "РЎРѕС…СЂР°РЅС‘РЅРЅС‹Р№ РјР°С‚РµСЂРёР°Р»",
     progress: null,
     tags: item.source_url ? ["link"] : ["saved"],
     updated_at: item.updated_at,
@@ -435,7 +435,7 @@ export function resolveSearchResult(result: SearchResult, bundle: {
 
 export function getEntityTitle(entity: DetailEntity): string {
   if (entity.kind === "incoming") {
-    return entity.item.summary ?? entity.item.proposed_type ?? "Входящее";
+    return entity.item.summary ?? entity.item.proposed_type ?? "Р’С…РѕРґСЏС‰РµРµ";
   }
   return entity.item.title;
 }
@@ -455,14 +455,10 @@ export function calendarMap(entries: CalendarEntry[]): Map<string, CalendarEntry
 export function availableTypeOptions(kind: DetailEntity["kind"]): Array<{ value: string; label: string }> {
   if (kind === "incoming") {
     return [
-      { value: "task", label: getTypeLabel("task") },
       { value: "reminder", label: getTypeLabel("reminder") },
+      { value: "list", label: getTypeLabel("list") },
       { value: "event", label: getTypeLabel("event") },
       { value: "note", label: getTypeLabel("note") },
-      { value: "list", label: getTypeLabel("list") },
-      { value: "reply_later", label: getTypeLabel("reply_later") },
-      { value: "save_only", label: getTypeLabel("save_only") },
-      { value: "inbox_review", label: "Оставить во входящих" },
     ];
   }
 
@@ -486,3 +482,4 @@ export function availableTypeOptions(kind: DetailEntity["kind"]): Array<{ value:
 export function canConvert(kind: DetailEntity["kind"]): boolean {
   return ["task", "reminder", "event", "reply_later", "note", "incoming", "saved"].includes(kind);
 }
+

@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+from datetime import timedelta
+
 from domain.enums import IntentType, SourceType, SuggestionActionType
 from domain.models import AnalysisContext, AnalysisItem, StructuredAnalysisResult, StructuredAnalysisSuggestion
 from rules.base import DeterministicRule
@@ -19,36 +21,38 @@ class ReplyLaterRule(DeterministicRule):
         if not chat_like:
             return result
         if any(hint in text for hint in REPLY_HINTS):
-            result.primary_intent = IntentType.REPLY_LATER
+            reminder_at = (context.now + timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)
+            result.primary_intent = IntentType.REMINDER
             result.items = [
                 AnalysisItem(
-                    type=IntentType.REPLY_LATER,
-                    title=result.items[0].title if result.items else "Вернуться и ответить",
+                    type=IntentType.REMINDER,
+                    title=result.items[0].title if result.items else "Ответить на сообщение",
                     description=context.extracted.extracted_text,
                     needs_confirmation=False,
-                    metadata={"source": "chat_context"},
+                    metadata={"source": "chat_context", "reply_like": True},
                 )
             ]
             result.user_action_suggestions = [
                 StructuredAnalysisSuggestion(
-                    action=SuggestionActionType.CREATE_REPLY_LATER,
+                    action=SuggestionActionType.CREATE_REMINDER,
                     label="Напомнить вечером",
                     target_item_index=0,
-                    target_type=IntentType.REPLY_LATER,
+                    target_type=IntentType.REMINDER,
+                    scheduled_for=reminder_at,
                 ),
                 StructuredAnalysisSuggestion(
-                    action=SuggestionActionType.REVIEW_NOW,
-                    label="Подготовить ответ",
+                    action=SuggestionActionType.CREATE_NOTE,
+                    label="Сохранить заметкой",
                     target_item_index=0,
-                    target_type=IntentType.REPLY_LATER,
+                    target_type=IntentType.NOTE,
                 ),
             ]
             return result
         if any(hint in text for hint in TASK_HINTS):
             if result.items:
-                result.items[0].type = IntentType.TASK
+                result.items[0].type = IntentType.REMINDER
             else:
-                result.items = [AnalysisItem(type=IntentType.TASK, title="Задача из переписки")]
-            result.primary_intent = IntentType.TASK
+                result.items = [AnalysisItem(type=IntentType.REMINDER, title="Напоминание из переписки")]
+            result.primary_intent = IntentType.REMINDER
         return result
 

@@ -17,14 +17,24 @@ class InboxFallbackRule(DeterministicRule):
             result.summary = result.summary or "Недостаточно данных для уверенного разбора"
             result.user_action_suggestions = [
                 StructuredAnalysisSuggestion(
-                    action=SuggestionActionType.REVIEW_NOW,
-                    label="Разобрать сейчас",
-                    target_type=IntentType.INBOX_REVIEW,
+                    action=SuggestionActionType.CREATE_REMINDER,
+                    label="Это напоминание",
+                    target_type=IntentType.REMINDER,
                 ),
                 StructuredAnalysisSuggestion(
-                    action=SuggestionActionType.SEND_TO_INBOX,
-                    label="Оставить во входящих",
-                    target_type=IntentType.INBOX_REVIEW,
+                    action=SuggestionActionType.CREATE_LIST,
+                    label="Это список",
+                    target_type=IntentType.LIST,
+                ),
+                StructuredAnalysisSuggestion(
+                    action=SuggestionActionType.CREATE_EVENT,
+                    label="Это событие",
+                    target_type=IntentType.EVENT,
+                ),
+                StructuredAnalysisSuggestion(
+                    action=SuggestionActionType.CREATE_NOTE,
+                    label="Это заметка",
+                    target_type=IntentType.NOTE,
                 ),
             ]
         return result

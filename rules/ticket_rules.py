@@ -59,7 +59,7 @@ class TicketRule(DeterministicRule):
                     ),
                     StructuredAnalysisSuggestion(
                         action=SuggestionActionType.CREATE_EVENT,
-                        label="Просто сохранить билет",
+                        label="Сохранить событие",
                         target_item_index=0,
                         target_type=IntentType.EVENT,
                     ),

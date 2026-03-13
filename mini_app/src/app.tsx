@@ -1,4 +1,4 @@
-import { startTransition, useMemo, useState } from "react";
+﻿import { startTransition, useMemo, useState } from "react";
 
 import { api } from "./api";
 import { BottomNav } from "./components/BottomNav";
@@ -31,6 +31,7 @@ export function App() {
   const [selectedEntity, setSelectedEntity] = useState<DetailEntity | null>(null);
   const [arrangeMode, setArrangeMode] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const {
     inbox,
     tasks,
@@ -74,15 +75,19 @@ export function App() {
   const pendingInboxCount = buildInboxSummary(inbox);
   const dayLabel = formatDayLabel(new Date());
   const userName = getTelegramFirstName();
-  const title = userName ? `${userName}, вот ваш день` : "Вот ваш день";
-  const subtitle = `${dayLabel}. Сначала всё, что важно на сегодня, а выполненное и входящее остаются под рукой, но не мешают.`;
+  const title = userName ? `${userName}, РІРѕС‚ РІР°С€ РґРµРЅСЊ` : "Р’РѕС‚ РІР°С€ РґРµРЅСЊ";
+  const subtitle = `${dayLabel}. РЎРЅР°С‡Р°Р»Р° РІСЃС‘, С‡С‚Рѕ РІР°Р¶РЅРѕ РЅР° СЃРµРіРѕРґРЅСЏ, Р° РІС‹РїРѕР»РЅРµРЅРЅРѕРµ Рё РІС…РѕРґСЏС‰РµРµ РѕСЃС‚Р°СЋС‚СЃСЏ РїРѕРґ СЂСѓРєРѕР№, РЅРѕ РЅРµ РјРµС€Р°СЋС‚.`;
 
   async function mutate(action: () => Promise<void>) {
+    setMutationError(null);
     setIsMutating(true);
     try {
       await action();
       await refresh();
       setSelectedEntity(null);
+    } catch (mutationFailure) {
+      setMutationError(mutationFailure instanceof Error ? mutationFailure.message : "Не удалось выполнить действие");
+      throw mutationFailure;
     } finally {
       setIsMutating(false);
     }
@@ -132,18 +137,14 @@ export function App() {
 
     await mutate(async () => {
       if (entity.kind === "incoming") {
-        if (normalizedType === "inbox_review") {
-          await api.updateInbox(entity.item.id, {
-            summary: draft.title,
-            proposed_type: entity.item.proposed_type,
-            needs_confirmation: true,
-            parse_status: "needs_review",
-          });
-          return;
-        }
         await api.resolveInbox(entity.item.id, {
           target_type: normalizedType,
           title: draft.title,
+          description: draft.description || null,
+          scheduled_at: scheduledAt,
+          kind: draft.kind || null,
+          source_url: draft.sourceUrl || null,
+          list_items: draft.listItems.map((item) => item.text).filter(Boolean),
           force_confirmation: false,
         });
         return;
@@ -252,13 +253,13 @@ export function App() {
     });
   }
 
-  async function resolveInboxItem(item: IncomingItem, targetType: string) {
+  async function resolveInboxItem(item: IncomingItem, payload: { targetType?: string; suggestedActionId?: number }) {
     await mutate(async () => {
-      if (targetType === "inbox_review") {
-        await api.updateInbox(item.id, { needs_confirmation: true, parse_status: "needs_review" });
-        return;
-      }
-      await api.resolveInbox(item.id, { target_type: targetType, force_confirmation: false });
+      await api.resolveInbox(item.id, {
+        target_type: payload.targetType,
+        suggested_action_id: payload.suggestedActionId,
+        force_confirmation: false,
+      });
     });
   }
 
@@ -284,7 +285,8 @@ export function App() {
     <main className="appShell">
       <div className="contentWrap">
         {error ? <section className="errorBanner">{error}</section> : null}
-        {isLoading ? <EmptyState title="Загружаю KeepIQ" text="Собираю ваши объекты в новый today-first интерфейс." /> : null}
+        {mutationError ? <section className="errorBanner">{mutationError}</section> : null}
+        {isLoading ? <EmptyState title="Р—Р°РіСЂСѓР¶Р°СЋ KeepIQ" text="РЎРѕР±РёСЂР°СЋ РІР°С€Рё РѕР±СЉРµРєС‚С‹ РІ РЅРѕРІС‹Р№ today-first РёРЅС‚РµСЂС„РµР№СЃ." /> : null}
 
         {!isLoading && tab === "today" ? (
           <TodayPage
@@ -314,7 +316,7 @@ export function App() {
             urgent={inboxGroups.urgent}
             quiet={inboxGroups.quiet}
             onOpen={(item) => setSelectedEntity({ kind: "incoming", item })}
-            onResolve={(item, targetType) => resolveInboxItem(item, targetType).catch(console.error)}
+            onResolve={(item, payload) => resolveInboxItem(item, payload).catch(console.error)}
           />
         ) : null}
 
@@ -351,3 +353,4 @@ export function App() {
     </main>
   );
 }
+

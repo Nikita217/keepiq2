@@ -25,6 +25,11 @@ class InboxActionService:
         user_id: int | None = None,
         target_type: str | None = None,
         title: str | None = None,
+        description: str | None = None,
+        scheduled_at: datetime | None = None,
+        kind: str | None = None,
+        source_url: str | None = None,
+        list_items: list[str] | None = None,
         force_confirmation: bool = False,
         suggested_action_id: int | None = None,
     ) -> IncomingItem:
@@ -39,9 +44,19 @@ class InboxActionService:
 
         if suggested_action_id is not None and 0 <= suggested_action_id < len(result.user_action_suggestions):
             selected_suggestion = result.user_action_suggestions[suggested_action_id]
-            result = self._apply_suggestion(result, selected_suggestion)
+            result = self._apply_suggestion(item, result, selected_suggestion)
         elif target_type:
-            result = self._coerce_result(item, result, target_type, title)
+            result = self._coerce_result(
+                item,
+                result,
+                target_type,
+                title,
+                description=description,
+                scheduled_at=scheduled_at,
+                kind=kind,
+                source_url=source_url,
+                list_items=list_items,
+            )
         elif title and result.items:
             result.items[0].title = title
             result.summary = title
@@ -90,6 +105,7 @@ class InboxActionService:
 
     def _apply_suggestion(
         self,
+        item: IncomingItem,
         result: StructuredAnalysisResult,
         suggestion: StructuredAnalysisSuggestion,
     ) -> StructuredAnalysisResult:
@@ -102,29 +118,36 @@ class InboxActionService:
             result.should_go_to_inbox = True
             result.items = []
             return result
+        if target is None and suggestion.target_type:
+            result = self._coerce_result(
+                item,
+                result,
+                suggestion.target_type.value,
+                item.summary,
+                description=compact_text(item.raw_text or item.extracted_text or item.summary),
+                scheduled_at=suggestion.scheduled_for,
+                kind=None,
+                source_url=item.source_url,
+                list_items=None,
+            )
+            target = result.items[0] if result.items else None
         if target and suggestion.scheduled_for:
             target.datetime = suggestion.scheduled_for
             target.date_only = False
-            if suggestion.target_type == IntentType.REPLY_LATER:
-                target.type = IntentType.REPLY_LATER
-            elif suggestion.target_type == IntentType.REMINDER and target.type == IntentType.TASK:
-                target.needs_confirmation = False
-            elif suggestion.target_type and suggestion.target_type != IntentType.REMINDER:
-                target.type = suggestion.target_type
+        if target and suggestion.target_type and suggestion.action != SuggestionActionType.CREATE_REMINDER:
+            target.type = suggestion.target_type
         if suggestion.action == SuggestionActionType.KEEP_ONLY_TASKS:
-            result.items = [item for item in result.items if item.type == IntentType.TASK]
-            result.primary_intent = IntentType.TASK if result.items else IntentType.INBOX_REVIEW
-        elif suggestion.action == SuggestionActionType.CREATE_LIST and target:
-            target.type = IntentType.LIST
-            result.primary_intent = IntentType.LIST
-        elif suggestion.action == SuggestionActionType.SAVE_ONLY and target:
-            target.type = IntentType.SAVE_ONLY
-            result.primary_intent = IntentType.SAVE_ONLY
-        elif suggestion.target_type and suggestion.target_type != IntentType.REMINDER:
+            result.items = [entry for entry in result.items if entry.type == IntentType.REMINDER]
+            result.primary_intent = IntentType.REMINDER if result.items else IntentType.INBOX_REVIEW
+        elif suggestion.action == SuggestionActionType.CREATE_REMINDER:
+            if target and target.type == IntentType.REMINDER:
+                result.primary_intent = IntentType.REMINDER
+        elif suggestion.target_type:
             result.primary_intent = suggestion.target_type
         result.should_go_to_inbox = False
-        for item in result.items:
-            item.needs_confirmation = False
+        for entry in result.items:
+            entry.needs_confirmation = False
+        result.summary = result.items[0].title if result.items else result.summary
         return result
 
     def _coerce_result(
@@ -133,22 +156,45 @@ class InboxActionService:
         result: StructuredAnalysisResult,
         target_type: str,
         title: str | None,
+        *,
+        description: str | None,
+        scheduled_at: datetime | None,
+        kind: str | None,
+        source_url: str | None,
+        list_items: list[str] | None,
     ) -> StructuredAnalysisResult:
         intent = IntentType(target_type)
         if result.items:
-            result.items[0].type = intent
+            target = result.items[0]
+            target.type = intent
             if title:
-                result.items[0].title = title
+                target.title = title
+            if description is not None:
+                target.description = description
+            if scheduled_at is not None or intent in {IntentType.REMINDER, IntentType.EVENT}:
+                target.datetime = scheduled_at
+                target.date_only = False
+            if list_items is not None and intent == IntentType.LIST:
+                target.list_items = list_items
+            if kind:
+                target.category = kind
+                target.metadata["kind"] = kind
+            if source_url:
+                target.links = [source_url]
+                target.metadata["url"] = source_url
         else:
-            result.items = [
-                AnalysisItem(
-                    type=intent,
-                    title=title or item.summary or compact_text(item.raw_text or item.extracted_text or "Объект"),
-                    description=compact_text(item.raw_text or item.extracted_text or item.summary),
-                    datetime=self._first_datetime(item),
-                    needs_confirmation=False,
-                )
-            ]
+            target = AnalysisItem(
+                type=intent,
+                title=title or item.summary or compact_text(item.raw_text or item.extracted_text or "Объект"),
+                description=description if description is not None else compact_text(item.raw_text or item.extracted_text or item.summary),
+                datetime=scheduled_at or self._first_datetime(item),
+                needs_confirmation=False,
+                list_items=list_items or [],
+                category=kind,
+                links=[source_url] if source_url else [],
+                metadata={key: value for key, value in {"kind": kind, "url": source_url}.items() if value},
+            )
+            result.items = [target]
         result.primary_intent = intent
         result.summary = title or result.summary or item.summary or result.items[0].title
         result.should_go_to_inbox = False

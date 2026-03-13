@@ -41,6 +41,11 @@ class IncomingItemRead(BaseModel):
 class InboxActionRequest(BaseModel):
     target_type: str | None = None
     title: str | None = None
+    description: str | None = None
+    scheduled_at: datetime | None = None
+    kind: str | None = None
+    source_url: str | None = None
+    list_items: list[str] = Field(default_factory=list)
     force_confirmation: bool = False
     suggested_action_id: int | None = None
 

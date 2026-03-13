@@ -35,6 +35,11 @@ async def resolve_inbox_item(
             user_id=user.id,
             target_type=payload.target_type,
             title=payload.title,
+            description=payload.description,
+            scheduled_at=payload.scheduled_at,
+            kind=payload.kind,
+            source_url=payload.source_url,
+            list_items=payload.list_items,
             force_confirmation=payload.force_confirmation,
             suggested_action_id=payload.suggested_action_id,
         )
@@ -90,3 +95,4 @@ def _to_read_model(item: IncomingItem) -> IncomingItemRead:
         entities=item.entities,
         logs=item.processing_logs,
     )
+

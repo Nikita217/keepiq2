@@ -14,12 +14,12 @@ Do not add extra keys.
 Do not invent dates, times, people, places, organizations, URLs, or event details.
 If you are unsure, lower confidence, mark the item with needs_confirmation=true, and route to inbox_review.
 If an input contains several meanings, split them into multiple items.
-Never collapse everything into a single task.
+Never collapse everything into a single reminder.
 Distinguish clearly:
 - event: a real-world occurrence the user should not miss
-- reminder: remembering something at a chosen time
-- reply_later: a message/conversation to answer later
-- save_only: information worth keeping without action
+- reminder: any actionable item or follow-up the user wants to remember, including answer-later cases
+- list: multiple checklist items that belong together
+- note: information worth keeping without scheduling
 - inbox_review: not enough certainty to classify safely
 """.strip()
 
@@ -33,12 +33,12 @@ FEW_SHOT_EXAMPLES = [
         "output": {
             "source_type": "plain_text",
             "detected_language": "ru",
-            "summary": "Пользователь хочет купить тапки завтра",
-            "primary_intent": "task",
+            "summary": "Нужно напомнить завтра купить тапки",
+            "primary_intent": "reminder",
             "confidence": 0.9,
             "items": [
                 {
-                    "type": "task",
+                    "type": "reminder",
                     "title": "Купить тапки",
                     "description": None,
                     "datetime": None,
@@ -79,11 +79,11 @@ FEW_SHOT_EXAMPLES = [
             "source_type": "screenshot",
             "detected_language": "ru",
             "summary": "В переписке есть просьба отправить договор",
-            "primary_intent": "task",
+            "primary_intent": "reminder",
             "confidence": 0.83,
             "items": [
                 {
-                    "type": "task",
+                    "type": "reminder",
                     "title": "Отправить договор",
                     "description": "Поручение из переписки",
                     "datetime": None,

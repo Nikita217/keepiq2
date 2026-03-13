@@ -21,7 +21,7 @@ class DateTimeSuggestionRule(DeterministicRule):
             return result
 
         primary = result.items[0]
-        if primary.type == IntentType.TASK and self._has_relative_day(result):
+        if primary.type == IntentType.REMINDER and self._has_relative_day(result):
             base_day = self._base_day(context)
             for hour in self.settings.ai_task_suggestion_hours[:3]:
                 suggestions.append(
@@ -35,11 +35,43 @@ class DateTimeSuggestionRule(DeterministicRule):
                 )
             suggestions.append(
                 StructuredAnalysisSuggestion(
-                    action=SuggestionActionType.CREATE_TASK,
+                    action=SuggestionActionType.CREATE_REMINDER,
                     label="Просто сохранить",
                     target_item_index=0,
-                    target_type=IntentType.TASK,
+                    target_type=IntentType.REMINDER,
                 )
+            )
+        elif primary.type == IntentType.REMINDER and primary.datetime and not primary.date_only:
+            suggestions.extend(
+                [
+                    StructuredAnalysisSuggestion(
+                        action=SuggestionActionType.CREATE_REMINDER,
+                        label="Оставить как есть",
+                        target_item_index=0,
+                        target_type=IntentType.REMINDER,
+                        scheduled_for=primary.datetime,
+                    ),
+                    StructuredAnalysisSuggestion(
+                        action=SuggestionActionType.CREATE_REMINDER,
+                        label="На час раньше",
+                        target_item_index=0,
+                        target_type=IntentType.REMINDER,
+                        scheduled_for=primary.datetime - timedelta(hours=1),
+                    ),
+                    StructuredAnalysisSuggestion(
+                        action=SuggestionActionType.CREATE_REMINDER,
+                        label="На час позже",
+                        target_item_index=0,
+                        target_type=IntentType.REMINDER,
+                        scheduled_for=primary.datetime + timedelta(hours=1),
+                    ),
+                    StructuredAnalysisSuggestion(
+                        action=SuggestionActionType.CREATE_NOTE,
+                        label="Сохранить заметкой",
+                        target_item_index=0,
+                        target_type=IntentType.NOTE,
+                    ),
+                ]
             )
         elif primary.type == IntentType.EVENT and primary.date_only:
             event_day = primary.datetime or self._date_only_from_metadata(primary.metadata)
@@ -77,33 +109,6 @@ class DateTimeSuggestionRule(DeterministicRule):
                         ),
                     ]
                 )
-        elif primary.type == IntentType.REPLY_LATER:
-            base = self._base_day(context)
-            suggestions.extend(
-                [
-                    StructuredAnalysisSuggestion(
-                        action=SuggestionActionType.CREATE_REPLY_LATER,
-                        label="Сегодня вечером",
-                        target_item_index=0,
-                        target_type=IntentType.REPLY_LATER,
-                        scheduled_for=context.now.replace(hour=19, minute=0, second=0, microsecond=0),
-                    ),
-                    StructuredAnalysisSuggestion(
-                        action=SuggestionActionType.CREATE_REPLY_LATER,
-                        label="Завтра",
-                        target_item_index=0,
-                        target_type=IntentType.REPLY_LATER,
-                        scheduled_for=base.replace(hour=10, minute=0, second=0, microsecond=0),
-                    ),
-                    StructuredAnalysisSuggestion(
-                        action=SuggestionActionType.CREATE_REPLY_LATER,
-                        label="В понедельник",
-                        target_item_index=0,
-                        target_type=IntentType.REPLY_LATER,
-                        scheduled_for=self._next_monday(context),
-                    ),
-                ]
-            )
         result.user_action_suggestions = self._dedupe(suggestions)
         return result
 
@@ -125,12 +130,6 @@ class DateTimeSuggestionRule(DeterministicRule):
             return datetime.fromisoformat(value)
         except ValueError:
             return None
-
-    def _next_monday(self, context: AnalysisContext):
-        days_ahead = (0 - context.now.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
-        return (context.now + timedelta(days=days_ahead)).replace(hour=10, minute=0, second=0, microsecond=0)
 
     def _dedupe(self, suggestions: list[StructuredAnalysisSuggestion]) -> list[StructuredAnalysisSuggestion]:
         seen: set[tuple[str, str, str | None]] = set()

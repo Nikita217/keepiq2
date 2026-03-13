@@ -39,6 +39,7 @@ EVENT_HINTS = (
 REPLY_HINTS = ("ответ", "reply", "что ответить", "ответить позже", "вернуться к сообщению")
 REQUEST_HINTS = ("можешь", "сделай", "нужно", "надо", "пришли", "отправь")
 CHAT_HINTS = ("чат", "перепис", "сообщени", "диалог")
+REMINDER_HINTS = ("напомни", "напомнить", "не забудь")
 RELATIVE_DATE_HINTS = (
     "сегодня",
     "завтра",
@@ -94,7 +95,7 @@ class HeuristicAIProvider(AIProvider):
             return StructuredAnalysisResult(
                 source_type=context.payload.source_type,
                 detected_language=self._detect_language(text),
-                summary="Пользователь прислал список покупок",
+                summary="Похоже, это список покупок",
                 primary_intent=IntentType.LIST,
                 confidence=0.94,
                 items=[
@@ -157,33 +158,19 @@ class HeuristicAIProvider(AIProvider):
             )
 
         if self._is_reply_later(context, text):
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary="Похоже, к этому сообщению нужно вернуться позже",
-                primary_intent=IntentType.REPLY_LATER,
+            return self._reminder_result(
+                context,
+                text,
+                entities,
+                exact_datetimes,
+                summary="Нужно вернуться к сообщению позже",
                 confidence=0.88,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.REPLY_LATER,
-                        title=self._title_from_text(text, fallback="Вернуться к сообщению"),
-                        description=text,
-                        datetime=exact_datetimes[0] if exact_datetimes else None,
-                        date_only=bool(entities.ambiguous_datetimes) and not exact_datetimes,
-                        needs_confirmation=False,
-                        metadata={"chat_like": True},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Chat-like context with answer-later semantics",
-                trace=AnalysisTrace(provider=self.provider_name),
+                title=self._normalize_reminder_title(text, fallback="Ответить на сообщение"),
+                metadata={"chat_like": True, "reply_like": True},
             )
 
         if self._is_chat_task(context, text):
-            return self._task_result(
+            return self._reminder_result(
                 context,
                 text,
                 entities,
@@ -250,26 +237,33 @@ class HeuristicAIProvider(AIProvider):
                 trace=AnalysisTrace(provider=self.provider_name),
             )
 
-        if self._looks_like_task(text):
-            return self._task_result(context, text, entities, exact_datetimes, summary="Похоже, это задача", confidence=0.89)
+        if self._looks_like_reminder(text):
+            return self._reminder_result(
+                context,
+                text,
+                entities,
+                exact_datetimes,
+                summary="Похоже, это напоминание",
+                confidence=0.89,
+            )
 
-        if self._is_link_save_only(context, text, entities):
+        if self._is_link_note(context, text, entities):
             url = entities.urls[0] if entities.urls else context.payload.source_url
             host = urlparse(url).netloc if url else "ссылка"
             return StructuredAnalysisResult(
                 source_type=context.payload.source_type,
                 detected_language=self._detect_language(text),
                 summary=f"Похоже, это материал на потом: {host}",
-                primary_intent=IntentType.SAVE_ONLY,
+                primary_intent=IntentType.NOTE,
                 confidence=0.82,
                 items=[
                     AnalysisItem(
-                        type=IntentType.SAVE_ONLY,
+                        type=IntentType.NOTE,
                         title=self._title_from_text(text, fallback=host or "Материал"),
                         description=text,
                         links=entities.urls,
                         needs_confirmation=False,
-                        metadata={"url": url},
+                        metadata={"url": url, "kind": "reference"},
                     )
                 ],
                 extracted_entities=entities,
@@ -281,26 +275,25 @@ class HeuristicAIProvider(AIProvider):
             )
 
         if context.payload.source_type in {SourceType.SCREENSHOT, SourceType.PHOTO, SourceType.IMAGE_WITH_TEXT, SourceType.MIXED_MESSAGE}:
-            confidence = 0.86 if text else 0.3
-            intent = IntentType.SAVE_ONLY if text else IntentType.INBOX_REVIEW
             return StructuredAnalysisResult(
                 source_type=context.payload.source_type,
                 detected_language=self._detect_language(text),
-                summary="Полезный материал без явного действия" if text else "Непонятный входящий объект",
-                primary_intent=intent,
-                confidence=confidence,
+                summary="Похоже, это заметка по материалу",
+                primary_intent=IntentType.NOTE,
+                confidence=0.86,
                 items=[
                     AnalysisItem(
-                        type=IntentType.SAVE_ONLY,
-                        title=self._title_from_text(text, fallback="Сохраненный материал"),
+                        type=IntentType.NOTE,
+                        title=self._title_from_text(text, fallback="Материал"),
                         description=text,
                         needs_confirmation=False,
+                        metadata={"kind": "reference"},
                     )
-                ] if text else [],
+                ],
                 extracted_entities=entities,
                 user_action_suggestions=[],
                 should_store_original=True,
-                should_go_to_inbox=not bool(text),
+                should_go_to_inbox=False,
                 reasoning_notes="Image content has no explicit action",
                 trace=AnalysisTrace(provider=self.provider_name),
             )
@@ -335,7 +328,7 @@ class HeuristicAIProvider(AIProvider):
             "soft": f"Спасибо, я сохраню это и вернусь к ответу позже. {preview}".strip(),
         }
 
-    def _task_result(
+    def _reminder_result(
         self,
         context: AnalysisContext,
         text: str,
@@ -344,12 +337,14 @@ class HeuristicAIProvider(AIProvider):
         *,
         summary: str,
         confidence: float,
+        title: str | None = None,
+        metadata: dict | None = None,
     ) -> StructuredAnalysisResult:
         exact_datetime = exact_datetimes[0] if exact_datetimes and self._has_explicit_time(text) else None
         date_value = exact_datetimes[0].isoformat() if exact_datetimes else None
         item = AnalysisItem(
-            type=IntentType.TASK,
-            title=self._normalize_task_title(text),
+            type=IntentType.REMINDER,
+            title=title or self._normalize_reminder_title(text),
             description=text,
             datetime=exact_datetime,
             date_only=bool(date_value) and not self._has_explicit_time(text) or bool(entities.ambiguous_datetimes),
@@ -358,20 +353,20 @@ class HeuristicAIProvider(AIProvider):
             links=entities.urls,
             needs_confirmation=bool(entities.ambiguous_datetimes) or (bool(date_value) and not self._has_explicit_time(text)),
             uncertain_fields=["datetime"] if bool(entities.ambiguous_datetimes) or (bool(date_value) and not self._has_explicit_time(text)) else [],
-            metadata={"date_value": date_value},
+            metadata={"date_value": date_value, **(metadata or {})},
         )
         return StructuredAnalysisResult(
             source_type=context.payload.source_type,
             detected_language=self._detect_language(text),
             summary=summary,
-            primary_intent=IntentType.TASK,
+            primary_intent=IntentType.REMINDER,
             confidence=confidence,
             items=[item],
             extracted_entities=entities,
             user_action_suggestions=[],
             should_store_original=True,
             should_go_to_inbox=False,
-            reasoning_notes="Explicit action verb detected",
+            reasoning_notes="Explicit reminder or action signal detected",
             trace=AnalysisTrace(provider=self.provider_name),
         )
 
@@ -397,21 +392,21 @@ class HeuristicAIProvider(AIProvider):
                         needs_confirmation=False,
                     )
                 )
-            elif any(hint in segment.lower() for hint in REPLY_HINTS):
+            elif self._looks_like_list_segment(segment):
                 items.append(
                     AnalysisItem(
-                        type=IntentType.REPLY_LATER,
-                        title=self._title_from_text(segment, fallback="Вернуться к сообщению"),
+                        type=IntentType.LIST,
+                        title=self._title_from_text(segment, fallback="Список"),
                         description=segment,
-                        datetime=exact_datetimes[0] if exact_datetimes else None,
-                        needs_confirmation=not bool(exact_datetimes),
+                        list_items=split_lines_to_items(segment),
+                        needs_confirmation=False,
                     )
                 )
             else:
                 items.append(
                     AnalysisItem(
-                        type=IntentType.TASK,
-                        title=self._normalize_task_title(segment),
+                        type=IntentType.REMINDER,
+                        title=self._normalize_reminder_title(segment),
                         description=segment,
                         datetime=exact_datetimes[0] if exact_datetimes and self._has_explicit_time(segment) else None,
                         date_only=bool(entities.ambiguous_datetimes) and not self._has_explicit_time(segment),
@@ -420,10 +415,18 @@ class HeuristicAIProvider(AIProvider):
                     )
                 )
         note_count = sum(1 for item in items if item.type == IntentType.NOTE)
-        task_count = sum(1 for item in items if item.type == IntentType.TASK)
-        summary = f"Пользователь перечислил {task_count} задачи"
+        reminder_count = sum(1 for item in items if item.type == IntentType.REMINDER)
+        list_count = sum(1 for item in items if item.type == IntentType.LIST)
+        parts: list[str] = []
+        if reminder_count:
+            parts.append(f"{reminder_count} напоминания")
+        if list_count:
+            parts.append(f"{list_count} списка")
         if note_count:
-            summary += f" и {note_count} идеи"
+            parts.append(f"{note_count} заметки")
+        summary = "В голосовом несколько пунктов"
+        if parts:
+            summary = f"В голосовом: {', '.join(parts)}"
         return StructuredAnalysisResult(
             source_type=context.payload.source_type,
             detected_language=self._detect_language(text),
@@ -435,7 +438,6 @@ class HeuristicAIProvider(AIProvider):
             user_action_suggestions=[
                 StructuredAnalysisSuggestion(action=SuggestionActionType.SAVE_ALL, label="Сохранить все"),
                 StructuredAnalysisSuggestion(action=SuggestionActionType.REVIEW_NOW, label="Проверить"),
-                StructuredAnalysisSuggestion(action=SuggestionActionType.KEEP_ONLY_TASKS, label="Только задачи"),
             ],
             should_store_original=True,
             should_go_to_inbox=False,
@@ -546,23 +548,31 @@ class HeuristicAIProvider(AIProvider):
         lowered = text.lower()
         return bool(entities.dates) and any(hint in lowered for hint in EVENT_HINTS)
 
-    def _looks_like_task(self, text: str) -> bool:
+    def _looks_like_reminder(self, text: str) -> bool:
         lowered = text.lower()
-        return lowered.startswith(TASK_VERBS) or any(f" {verb} " in f" {lowered} " for verb in TASK_VERBS)
+        return (
+            lowered.startswith(TASK_VERBS)
+            or lowered.startswith(REMINDER_HINTS)
+            or any(f" {verb} " in f" {lowered} " for verb in TASK_VERBS)
+            or any(hint in lowered for hint in REMINDER_HINTS)
+        )
 
-    def _is_link_save_only(self, context: AnalysisContext, text: str, entities: ExtractedEntities) -> bool:
-        if context.payload.source_type == SourceType.LINK and not self._looks_like_task(text):
+    def _is_link_note(self, context: AnalysisContext, text: str, entities: ExtractedEntities) -> bool:
+        if context.payload.source_type == SourceType.LINK and not self._looks_like_reminder(text):
             return True
-        return bool(entities.urls) and not self._looks_like_task(text) and not self._is_event(text, entities)
+        return bool(entities.urls) and not self._looks_like_reminder(text) and not self._is_event(text, entities)
 
-    def _normalize_task_title(self, text: str) -> str:
+    def _normalize_reminder_title(self, text: str, fallback: str = "Напоминание") -> str:
         cleaned = compact_text(text)
         lowered = cleaned.lower()
-        if lowered.startswith("завтра "):
-            cleaned = compact_text(cleaned[7:])
-        if lowered.startswith("послезавтра "):
-            cleaned = compact_text(cleaned[11:])
-        return cleaned[:120] or "Задача"
+        prefixes = ("завтра ", "послезавтра ", "сегодня ", "напомни ", "напомнить ", "не забудь ")
+        for prefix in prefixes:
+            if lowered.startswith(prefix):
+                cleaned = compact_text(cleaned[len(prefix) :])
+                lowered = cleaned.lower()
+        if cleaned.lower().startswith("ответить "):
+            return cleaned[:120]
+        return cleaned[:120] or fallback
 
     def _extract_event_title(self, text: str) -> str | None:
         if "концерт" in text.lower():
@@ -579,6 +589,9 @@ class HeuristicAIProvider(AIProvider):
 
     def _title_from_text(self, text: str, fallback: str = "Сохраненный объект") -> str:
         return compact_text(text)[:120] or fallback
+
+    def _looks_like_list_segment(self, text: str) -> bool:
+        return len(split_lines_to_items(text)) >= 2 and "," in text
 
     def _is_bad_transcription(self, context: AnalysisContext, text: str) -> bool:
         return context.payload.source_type == SourceType.VOICE_MESSAGE and text.startswith("[transcription unavailable]")
@@ -601,3 +614,4 @@ class HeuristicAIProvider(AIProvider):
             reasoning_notes=summary,
             trace=AnalysisTrace(provider=self.provider_name, fallback_used=True),
         )
+
