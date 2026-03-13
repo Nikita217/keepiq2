@@ -3,8 +3,10 @@
 from sqlalchemy import select
 
 from ai.heuristic_provider import HeuristicAIProvider
-from models import Event, ListEntity, Note, Reminder
+from models import Attachment, Event, ListEntity, Note, Reminder
+from repositories.incoming import IncomingRepository
 from services.ingestion import IngestionService
+from services.inbox_actions import InboxActionService
 from storage.local import LocalStorageAdapter
 
 
@@ -21,110 +23,124 @@ class VoiceFixtureProvider(HeuristicAIProvider):
         return self.transcript
 
 
-class BadVoiceProvider(HeuristicAIProvider):
-    async def transcribe_audio(self, file_path):
-        return "[transcription unavailable] voice.ogg"
-
-
-async def test_tomorrow_buy_slippers_builds_reminder_suggestions(session):
+async def test_motivation_does_not_become_extra_entity(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
     item = await service.ingest_text(
         user_id=1,
         chat_id=1,
         message_id=1,
         update_id=1,
-        text="завтра купить тапки",
+        text="Я хочу накачаться, поэтому напомни мне завтра покачать пресс",
     )
 
     assert item.proposed_type == "reminder"
-    assert item.needs_confirmation is True
+    assert len(item.analysis_result_json["items"]) == 1
+    assert "покачать пресс" in item.analysis_result_json["items"][0]["title"].lower()
     labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
-    assert labels[:4] == ["Завтра в 12:00", "Завтра в 15:00", "Завтра в 18:00", "Просто сохранить"]
-    assert "Понял" in item.metadata_json["assistant_response"]
+    assert labels == [
+        "Напомнить завтра в 10:00",
+        "Напомнить завтра в 12:00",
+        "Напомнить завтра в 18:00",
+        "Оставить во входящих",
+    ]
 
 
-async def test_shopping_list_becomes_list(session):
+async def test_shopping_list_is_one_list(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
     item = await service.ingest_text(
         user_id=1,
         chat_id=1,
         message_id=2,
         update_id=2,
-        text="купить молоко, сыр, батарейки",
+        text="Купить молоко, сыр, батарейки",
     )
 
     assert item.proposed_type == "list"
+    assert len(item.analysis_result_json["items"]) == 1
+    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
+    assert labels == ["Сохранить списком", "Сохранить заметкой", "Оставить во входящих"]
     lists = (await session.execute(select(ListEntity))).scalars().all()
     assert len(lists) == 1
     assert lists[0].title == "Список покупок"
 
 
-async def test_voice_with_two_reminders_and_one_note_is_split(session):
-    provider = VoiceFixtureProvider(
-        "написать Саше, купить батарейки, идея для видео про старые нейросети"
-    )
-    service = IngestionService(session, provider=provider, storage=DummyStorage())
-    item = await service.ingest_file(
+async def test_event_context_creates_one_reminder(session):
+    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+    item = await service.ingest_text(
         user_id=1,
         chat_id=1,
         message_id=3,
         update_id=3,
-        incoming_type="voice_message",
-        filename="voice.ogg",
-        content=b"voice",
-        content_type="audio/ogg",
+        text="18 мая концерт The Hatters, напомни за неделю купить билет",
     )
 
-    result_items = item.analysis_result_json["items"]
-    assert len(result_items) == 3
-    assert sum(1 for analysis_item in result_items if analysis_item["type"] == "reminder") == 2
-    assert sum(1 for analysis_item in result_items if analysis_item["type"] == "note") == 1
-    assert "Разобрал это" in item.metadata_json["assistant_response"]
+    assert item.proposed_type == "reminder"
+    assert len(item.analysis_result_json["items"]) == 1
+    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
+    assert labels == [
+        "Напомнить 11 мая в 10:00",
+        "Напомнить 11 мая в 12:00",
+        "Напомнить 11 мая в 18:00",
+        "Оставить во входящих",
+    ]
 
 
-async def test_chat_screenshot_request_becomes_reminder(session):
+async def test_idea_becomes_note(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_file(
+    item = await service.ingest_text(
         user_id=1,
         chat_id=1,
         message_id=4,
         update_id=4,
-        incoming_type="screenshot",
-        filename="chat.png",
-        content=b"png",
-        content_type="image/png",
-        metadata={"ocr_text": "Скрин чата: можешь завтра отправить договор?"},
+        text="Идея: снять ролик про старые нейросети",
     )
 
-    assert item.proposed_type == "reminder"
+    assert item.proposed_type == "note"
+    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
+    assert labels == ["Сохранить заметкой", "Оставить во входящих"]
+    notes = (await session.execute(select(Note))).scalars().all()
+    assert len(notes) == 1
 
 
-async def test_chat_screenshot_reply_later_becomes_reminder(session):
+async def test_two_independent_actions_are_allowed(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_file(
+    item = await service.ingest_text(
         user_id=1,
         chat_id=1,
         message_id=5,
         update_id=5,
-        incoming_type="screenshot",
-        filename="chat.png",
-        content=b"png",
-        content_type="image/png",
-        metadata={"ocr_text": "Скрин переписки: ответить Маше вечером"},
+        text="Завтра купить корм и написать Диме",
     )
 
     assert item.proposed_type == "reminder"
-    reminder_items = (await session.execute(select(Reminder))).scalars().all()
-    assert reminder_items
+    assert len(item.analysis_result_json["items"]) == 2
 
 
-async def test_ticket_becomes_event_with_reminder_options(session):
+async def test_screenshot_without_action_stays_note_like(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
     item = await service.ingest_file(
         user_id=1,
         chat_id=1,
         message_id=6,
         update_id=6,
+        incoming_type="screenshot",
+        filename="chat.png",
+        content=b"png",
+        content_type="image/png",
+        metadata={"ocr_text": "Скрин переписки про детали встречи и цены без явной просьбы"},
+    )
+
+    assert item.proposed_type == "note"
+    assert all(action["label"] != "Напомнить" for action in item.metadata_json.get("suggested_actions", []))
+
+
+async def test_ticket_event_is_materialized_with_exact_time(session):
+    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+    item = await service.ingest_file(
+        user_id=1,
+        chat_id=1,
+        message_id=7,
+        update_id=7,
         incoming_type="ticket",
         filename="ticket.pdf",
         content=b"pdf",
@@ -134,10 +150,13 @@ async def test_ticket_becomes_event_with_reminder_options(session):
 
     assert item.proposed_type == "event"
     labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
-    assert labels[:4] == ["За день", "За 3 часа", "Утром в день события", "Сохранить событие"]
+    assert labels[:2] == ["Создать событие 18 мая в 19:00", "Создать событие 18 мая"]
+    events = (await session.execute(select(Event))).scalars().all()
+    assert len(events) == 1
+    assert events[0].starts_at is not None
 
 
-async def test_useful_screenshot_without_action_becomes_note(session):
+async def test_bad_ocr_goes_to_inbox_but_keeps_original(session):
     service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
     item = await service.ingest_file(
         user_id=1,
@@ -145,172 +164,100 @@ async def test_useful_screenshot_without_action_becomes_note(session):
         message_id=8,
         update_id=8,
         incoming_type="screenshot",
-        filename="reference.png",
-        content=b"png",
-        content_type="image/png",
-        metadata={"ocr_text": "Подборка референсов для лендинга с хорошей типографикой"},
-    )
-
-    assert item.proposed_type == "note"
-    notes = (await session.execute(select(Note))).scalars().all()
-    assert notes
-
-
-async def test_unknown_object_goes_to_inbox_review(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_file(
-        user_id=1,
-        chat_id=1,
-        message_id=9,
-        update_id=9,
-        incoming_type="photo",
-        filename="meme.png",
-        content=b"png",
-        content_type="image/png",
-    )
-
-    assert item.proposed_type == "inbox_review"
-    assert item.needs_confirmation is True
-    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
-    assert labels == ["Это напоминание", "Это список", "Это событие", "Это заметка"]
-
-
-async def test_date_without_time_stays_ambiguous_for_event(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=10,
-        update_id=10,
-        text="18 мая концерт The Hatters",
-    )
-
-    assert item.proposed_type == "event"
-    assert item.needs_confirmation is True
-    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
-    assert "Утром в этот день" in labels
-
-
-async def test_time_without_date_does_not_create_exact_datetime_for_reminder(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=11,
-        update_id=11,
-        text="купить цветы в 19:00",
-    )
-
-    assert item.proposed_type == "reminder"
-    assert item.needs_confirmation is True
-    assert item.analysis_result_json["items"][0]["datetime"] is None
-
-
-async def test_bad_ocr_routes_to_inbox(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_file(
-        user_id=1,
-        chat_id=1,
-        message_id=12,
-        update_id=12,
-        incoming_type="screenshot",
-        filename="empty.png",
+        filename="bad.png",
         content=b"png",
         content_type="image/png",
         metadata={"ocr_text": ""},
     )
 
-    assert item.proposed_type == "inbox_review"
+    assert item.parse_status == "needs_review"
+    attachments = (await session.execute(select(Attachment))).scalars().all()
+    assert attachments
 
 
-async def test_bad_transcription_routes_to_inbox(session):
-    service = IngestionService(session, provider=BadVoiceProvider(), storage=DummyStorage())
+async def test_voice_with_one_action_and_emotion_stays_one_reminder(session):
+    provider = VoiceFixtureProvider("Я переживаю, что забуду, напомни завтра оплатить интернет")
+    service = IngestionService(session, provider=provider, storage=DummyStorage())
     item = await service.ingest_file(
         user_id=1,
         chat_id=1,
-        message_id=13,
-        update_id=13,
+        message_id=9,
+        update_id=9,
         incoming_type="voice_message",
         filename="voice.ogg",
         content=b"voice",
         content_type="audio/ogg",
     )
 
-    assert item.proposed_type == "inbox_review"
-
-
-async def test_forwarded_message_with_comment_becomes_reminder(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=15,
-        update_id=15,
-        text="Пересланное сообщение: ответить Саше позже",
-        forwarded=True,
-    )
-
     assert item.proposed_type == "reminder"
+    assert len(item.analysis_result_json["items"]) == 1
 
 
-async def test_idea_becomes_note(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=16,
-        update_id=16,
-        text="Идея для видео: коты делают бизнес в Египте",
-    )
-
-    assert item.proposed_type == "note"
-    notes = (await session.execute(select(Note))).scalars().all()
-    assert notes
-
-
-async def test_poorly_classified_text_falls_back_to_inbox_review(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=17,
-        update_id=17,
-        text="ммм ну вот это такое",
-    )
-
-    assert item.proposed_type == "inbox_review"
-
-
-async def test_high_confidence_reminder_is_materialized(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
-    item = await service.ingest_text(
-        user_id=1,
-        chat_id=1,
-        message_id=18,
-        update_id=18,
-        text="купить шапку",
-    )
-
-    assert item.proposed_type == "reminder"
-    reminders = (await session.execute(select(Reminder))).scalars().all()
-    assert reminders
-
-
-async def test_ticket_event_materializes_event(session):
-    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+async def test_voice_with_multiple_actions_splits(session):
+    provider = VoiceFixtureProvider("Завтра купить корм и написать Диме")
+    service = IngestionService(session, provider=provider, storage=DummyStorage())
     item = await service.ingest_file(
         user_id=1,
         chat_id=1,
-        message_id=19,
-        update_id=19,
-        incoming_type="ticket",
-        filename="ticket.pdf",
-        content=b"pdf",
-        content_type="application/pdf",
-        metadata={"ocr_text": "Билет: концерт The Hatters 18 мая 2026 в 19:00"},
+        message_id=10,
+        update_id=10,
+        incoming_type="voice_message",
+        filename="voice.ogg",
+        content=b"voice",
+        content_type="audio/ogg",
     )
 
-    events = (await session.execute(select(Event))).scalars().all()
-    assert item.proposed_type == "event"
-    assert events
+    assert len(item.analysis_result_json["items"]) == 2
 
+
+async def test_date_without_time_offers_ready_times(session):
+    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+    item = await service.ingest_text(
+        user_id=1,
+        chat_id=1,
+        message_id=11,
+        update_id=11,
+        text="18 мая концерт The Hatters",
+    )
+
+    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
+    assert labels == [
+        "Создать событие 18 мая",
+        "Создать событие 18 мая в 10:00",
+        "Создать событие 18 мая в 18:00",
+        "Оставить во входящих",
+    ]
+    assert all("выбрать" not in label.lower() for label in labels)
+
+
+async def test_absent_date_does_not_create_fake_reminder(session):
+    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+    item = await service.ingest_text(
+        user_id=1,
+        chat_id=1,
+        message_id=12,
+        update_id=12,
+        text="Напомни купить батарейки",
+    )
+
+    labels = [action["label"] for action in item.metadata_json.get("suggested_actions", [])]
+    assert labels == ["Сохранить заметкой", "Оставить во входящих"]
+    reminders = (await session.execute(select(Reminder))).scalars().all()
+    assert reminders == []
+
+
+async def test_resolve_action_creates_object_and_removes_from_inbox(session):
+    service = IngestionService(session, provider=HeuristicAIProvider(), storage=DummyStorage())
+    item = await service.ingest_text(
+        user_id=1,
+        chat_id=1,
+        message_id=13,
+        update_id=13,
+        text="Я хочу накачаться, поэтому напомни мне завтра покачать пресс",
+    )
+
+    await InboxActionService(session).resolve(item_id=item.id, user_id=1, suggested_action_id=0)
+    reminders = (await session.execute(select(Reminder))).scalars().all()
+    assert len(reminders) == 1
+    inbox_items = await IncomingRepository(session).list_inbox(user_id=1)
+    assert all(inbox_item.id != item.id for inbox_item in inbox_items)

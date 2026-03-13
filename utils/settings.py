@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     ai_max_retries: int = Field(default=2, alias="AI_MAX_RETRIES")
     ai_high_confidence_threshold: float = Field(default=0.85, alias="AI_HIGH_CONFIDENCE_THRESHOLD")
     ai_medium_confidence_threshold: float = Field(default=0.60, alias="AI_MEDIUM_CONFIDENCE_THRESHOLD")
+    ai_default_reminder_times: list[str] = Field(
+        default_factory=lambda: ["10:00", "12:00", "18:00"],
+        alias="AI_DEFAULT_REMINDER_TIMES",
+    )
+    ai_default_event_times: list[str] = Field(
+        default_factory=lambda: ["10:00", "18:00"],
+        alias="AI_DEFAULT_EVENT_TIMES",
+    )
     ai_task_suggestion_hours: list[int] = Field(default_factory=lambda: [12, 15, 18], alias="AI_TASK_SUGGESTION_HOURS")
     ai_date_only_event_suggestion_hours: list[int] = Field(
         default_factory=lambda: [9, 14, 19], alias="AI_DATE_ONLY_EVENT_SUGGESTION_HOURS"
@@ -76,4 +84,3 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.local_storage_root.mkdir(parents=True, exist_ok=True)
     return settings
-

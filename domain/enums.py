@@ -24,14 +24,21 @@ class SourceType(StrEnum):
 
 
 class IntentType(StrEnum):
-    TASK = "task"
     REMINDER = "reminder"
+    LIST = "list"
     EVENT = "event"
     NOTE = "note"
-    LIST = "list"
+    INBOX_REVIEW = "inbox_review"
+    TASK = "task"
     REPLY_LATER = "reply_later"
     SAVE_ONLY = "save_only"
-    INBOX_REVIEW = "inbox_review"
+
+
+class FinalType(StrEnum):
+    REMINDER = "reminder"
+    LIST = "list"
+    EVENT = "event"
+    NOTE = "note"
 
 
 class ConfidenceLevel(StrEnum):
@@ -40,16 +47,14 @@ class ConfidenceLevel(StrEnum):
     LOW = "low"
 
 
+class ActionKind(StrEnum):
+    CREATE = "create"
+    KEEP_IN_INBOX = "keep_in_inbox"
+
+
 class SuggestionActionType(StrEnum):
-    CREATE_TASK = "create_task"
     CREATE_REMINDER = "create_reminder"
+    CREATE_LIST = "create_list"
     CREATE_EVENT = "create_event"
     CREATE_NOTE = "create_note"
-    CREATE_LIST = "create_list"
-    CREATE_REPLY_LATER = "create_reply_later"
-    SAVE_ONLY = "save_only"
-    SEND_TO_INBOX = "send_to_inbox"
-    REVIEW_NOW = "review_now"
-    SAVE_ALL = "save_all"
-    KEEP_ONLY_TASKS = "keep_only_tasks"
-
+    KEEP_IN_INBOX = "keep_in_inbox"

@@ -8,17 +8,14 @@ function confidenceLabel(value: number | null): string {
   if (value >= 0.85) {
     return `уверенность ${Math.round(value * 100)}%`;
   }
-  if (value >= 0.65) {
+  if (value >= 0.6) {
     return `нужна проверка ${Math.round(value * 100)}%`;
   }
   return `не уверен ${Math.round(value * 100)}%`;
 }
 
 const FALLBACK_ACTIONS = [
-  { label: "Напоминание", targetType: "reminder" },
-  { label: "Список", targetType: "list" },
-  { label: "Событие", targetType: "event" },
-  { label: "Заметка", targetType: "note" },
+  { label: "Оставить во входящих", targetType: "inbox_review" },
 ];
 
 export function InboxCard({
@@ -62,4 +59,3 @@ export function InboxCard({
     </article>
   );
 }
-

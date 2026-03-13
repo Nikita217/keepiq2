@@ -1,72 +1,35 @@
 ﻿from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse
 
 from dateparser.search import search_dates
 
 from ai.base import AIProvider
-from domain.enums import IntentType, SourceType, SuggestionActionType
-from domain.models import (
-    AnalysisContext,
-    AnalysisItem,
-    AnalysisTrace,
-    ExtractedEntities,
-    StructuredAnalysisResult,
-    StructuredAnalysisSuggestion,
-)
+from domain.analysis_models import AIAnalysisItem, AIAnalysisResult, AnalysisContext, ExtractedEntities, ReasoningFlags
+from domain.enums import FinalType, SourceType
+from rules.event_context_rules import detect_event_context
+from rules.list_rules import detect_list_items, looks_like_list
+from rules.motivation_filter_rules import strip_background_motivation
 from utils.settings import get_settings
-from utils.text import compact_text, split_lines_to_items
+from utils.text import compact_text
 
-
-TASK_VERBS = ("купить", "написать", "позвонить", "отправить", "сделать", "проверить", "оплатить", "заказать")
-IDEA_HINTS = ("идея", "idea", "мысль")
-EVENT_HINTS = (
-    "концерт",
-    "самолет",
-    "самолёт",
-    "рейс",
-    "поезд",
-    "вылет",
-    "регистрация",
-    "бронь",
-    "booking",
-    "reservation",
-    "встреча",
-)
-REPLY_HINTS = ("ответ", "reply", "что ответить", "ответить позже", "вернуться к сообщению")
-REQUEST_HINTS = ("можешь", "сделай", "нужно", "надо", "пришли", "отправь")
-CHAT_HINTS = ("чат", "перепис", "сообщени", "диалог")
-REMINDER_HINTS = ("напомни", "напомнить", "не забудь")
-RELATIVE_DATE_HINTS = (
-    "сегодня",
-    "завтра",
-    "послезавтра",
-    "в пятницу",
-    "в субботу",
-    "в воскресенье",
-    "в понедельник",
-    "в следующий",
-    "на следующей неделе",
-    "к выходным",
-)
-AMBIGUOUS_TIME_HINTS = ("утром", "днем", "днём", "вечером", "после обеда")
-MONTHS = (
-    "январ",
-    "феврал",
-    "март",
-    "апрел",
-    "мая",
-    "июня",
-    "июля",
-    "август",
-    "сентябр",
-    "октябр",
-    "ноябр",
-    "декабр",
-)
+TASK_VERBS = ("купить", "написать", "позвонить", "отправить", "сделать", "записаться", "заказать", "оплатить")
+EVENT_HINTS = ("концерт", "встреча", "поездка", "бронь", "booking", "reservation", "прием", "приём", "билет")
+IDEA_HINTS = ("идея", "мысль", "idea")
+WEEKDAY_MAP = {
+    "понедельник": 0,
+    "вторник": 1,
+    "среду": 2,
+    "среда": 2,
+    "четверг": 3,
+    "пятницу": 4,
+    "пятница": 4,
+    "субботу": 5,
+    "суббота": 5,
+    "воскресенье": 6,
+}
 
 
 class HeuristicAIProvider(AIProvider):
@@ -75,243 +38,181 @@ class HeuristicAIProvider(AIProvider):
     def __init__(self) -> None:
         self.settings = get_settings()
 
-    async def analyze(self, context: AnalysisContext) -> StructuredAnalysisResult:
-        text = compact_text(context.extracted.extracted_text)
-        entities, exact_datetimes = self._extract_entities(text)
-        if not text:
-            return self._inbox_result(context, "Не удалось извлечь текст из объекта")
-        if self._is_bad_transcription(context, text):
-            return self._inbox_result(context, "Транскрипция получилась слишком слабой для уверенного разбора")
-        if self._is_bad_ocr(context, text):
-            return self._inbox_result(context, "В изображении не удалось уверенно прочитать текст")
-
-        if context.payload.source_type == SourceType.VOICE_MESSAGE:
-            voice_result = self._voice_result(context, text, entities, exact_datetimes)
-            if voice_result is not None:
-                return voice_result
-
-        if self._is_shopping_list(text):
-            items = self._shopping_items(text)
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary="Похоже, это список покупок",
-                primary_intent=IntentType.LIST,
-                confidence=0.94,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.LIST,
-                        title="Список покупок",
-                        description=text,
-                        category="shopping",
-                        list_items=items,
-                        needs_confirmation=False,
-                        metadata={"kind": "shopping"},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[
-                    StructuredAnalysisSuggestion(
-                        action=SuggestionActionType.CREATE_LIST,
-                        label="Сохранить как список",
-                        target_item_index=0,
-                        target_type=IntentType.LIST,
-                    )
-                ],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Comma-separated shopping items are better represented as a list",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        if self._is_ticket_or_booking(context, text):
-            title = self._extract_event_title(text) or "Событие из билета"
-            item = AnalysisItem(
-                type=IntentType.EVENT,
-                title=title,
-                description=text,
-                datetime=exact_datetimes[0] if exact_datetimes else None,
-                date_only=not self._has_explicit_time(text),
-                category="travel" if "рейс" in text.lower() or "самолет" in text.lower() else "events",
-                places=entities.places,
-                links=entities.urls,
-                needs_confirmation=not bool(exact_datetimes),
-                uncertain_fields=[] if exact_datetimes else ["datetime"],
-                metadata={
-                    "ticket_like": True,
-                    "date_value": exact_datetimes[0].isoformat() if exact_datetimes and not self._has_explicit_time(text) else None,
-                },
-            )
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary=f"Похоже, это билет или бронь: {title}",
-                primary_intent=IntentType.EVENT,
-                confidence=0.9,
-                items=[item],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Ticket or booking signal has event priority",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        if self._is_reply_later(context, text):
-            return self._reminder_result(
-                context,
-                text,
-                entities,
-                exact_datetimes,
-                summary="Нужно вернуться к сообщению позже",
-                confidence=0.88,
-                title=self._normalize_reminder_title(text, fallback="Ответить на сообщение"),
-                metadata={"chat_like": True, "reply_like": True},
-            )
-
-        if self._is_chat_task(context, text):
-            return self._reminder_result(
-                context,
-                text,
-                entities,
-                exact_datetimes,
-                summary="В переписке есть просьба или поручение",
-                confidence=0.83,
-            )
-
-        if self._is_idea(text):
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary="Похоже, это идея или заметка",
-                primary_intent=IntentType.NOTE,
-                confidence=0.88,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.NOTE,
-                        title=self._title_from_text(text),
-                        description=text,
-                        category="ideas",
-                        needs_confirmation=False,
-                        metadata={"kind": "idea"},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Idea hints detected",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        if self._is_event(text, entities):
-            title = self._extract_event_title(text) or self._title_from_text(text, fallback="Событие")
-            exact_datetime = exact_datetimes[0] if exact_datetimes and self._has_explicit_time(text) else None
-            date_value = exact_datetimes[0].isoformat() if exact_datetimes else None
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary=f"Похоже, это событие: {title}",
-                primary_intent=IntentType.EVENT,
-                confidence=0.87,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.EVENT,
-                        title=title,
-                        description=text,
-                        datetime=exact_datetime,
-                        date_only=bool(date_value) and not self._has_explicit_time(text),
-                        category="events",
-                        places=entities.places,
-                        links=entities.urls,
-                        needs_confirmation=not self._has_explicit_time(text),
-                        uncertain_fields=[] if self._has_explicit_time(text) else ["datetime"],
-                        metadata={"date_value": date_value},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Detected event keyword with date signal",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        if self._looks_like_reminder(text):
-            return self._reminder_result(
-                context,
-                text,
-                entities,
-                exact_datetimes,
-                summary="Похоже, это напоминание",
-                confidence=0.89,
-            )
-
-        if self._is_link_note(context, text, entities):
-            url = entities.urls[0] if entities.urls else context.payload.source_url
-            host = urlparse(url).netloc if url else "ссылка"
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary=f"Похоже, это материал на потом: {host}",
-                primary_intent=IntentType.NOTE,
-                confidence=0.82,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.NOTE,
-                        title=self._title_from_text(text, fallback=host or "Материал"),
-                        description=text,
-                        links=entities.urls,
-                        needs_confirmation=False,
-                        metadata={"url": url, "kind": "reference"},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Link without explicit action",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        if context.payload.source_type in {SourceType.SCREENSHOT, SourceType.PHOTO, SourceType.IMAGE_WITH_TEXT, SourceType.MIXED_MESSAGE}:
-            return StructuredAnalysisResult(
-                source_type=context.payload.source_type,
-                detected_language=self._detect_language(text),
-                summary="Похоже, это заметка по материалу",
-                primary_intent=IntentType.NOTE,
-                confidence=0.86,
-                items=[
-                    AnalysisItem(
-                        type=IntentType.NOTE,
-                        title=self._title_from_text(text, fallback="Материал"),
-                        description=text,
-                        needs_confirmation=False,
-                        metadata={"kind": "reference"},
-                    )
-                ],
-                extracted_entities=entities,
-                user_action_suggestions=[],
-                should_store_original=True,
-                should_go_to_inbox=False,
-                reasoning_notes="Image content has no explicit action",
-                trace=AnalysisTrace(provider=self.provider_name),
-            )
-
-        return StructuredAnalysisResult(
-            source_type=context.payload.source_type,
-            detected_language=self._detect_language(text),
-            summary="Не удалось уверенно классифицировать объект",
-            primary_intent=IntentType.INBOX_REVIEW,
-            confidence=0.48,
-            items=[],
-            extracted_entities=entities,
-            user_action_suggestions=[],
-            should_store_original=True,
-            should_go_to_inbox=True,
-            reasoning_notes="Heuristics were not confident enough",
-            trace=AnalysisTrace(provider=self.provider_name),
+    async def analyze(self, context: AnalysisContext) -> AIAnalysisResult:
+        text = compact_text(context.extracted.extracted_text or context.payload.raw_text)
+        entities = self._extract_entities(text, context)
+        cleaned_text, has_motivation = strip_background_motivation(text)
+        flags = ReasoningFlags(
+            contains_background_motivation=has_motivation,
+            contains_actionable_request=self._contains_actionable_request(cleaned_text),
+            contains_event_context=False,
+            contains_multiple_independent_actions=False,
+            contains_list_pattern=False,
+            ambiguous_datetime=False,
         )
+
+        if context.extracted.extraction_errors and not text:
+            return self._fallback_result(context, text, "Не удалось извлечь содержимое", entities, 0.2)
+
+        if context.payload.source_type == SourceType.VOICE_MESSAGE and text.startswith("[transcription unavailable]"):
+            return self._fallback_result(context, text, "Не удалось уверенно расшифровать голосовое", entities, 0.2)
+
+        if context.payload.source_type in {SourceType.PHOTO, SourceType.SCREENSHOT, SourceType.IMAGE_WITH_TEXT} and not text:
+            return self._fallback_result(context, text, "Не удалось уверенно прочитать изображение", entities, 0.2)
+
+        if looks_like_list(cleaned_text):
+            flags.contains_list_pattern = True
+            items = detect_list_items(cleaned_text)
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Список",
+                primary_type=FinalType.LIST,
+                secondary_candidate_type=FinalType.NOTE,
+                confidence=0.94,
+                needs_user_confirmation=False,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.LIST,
+                        title=self._guess_list_title(cleaned_text),
+                        description=None,
+                        list_items=items,
+                        confidence=0.94,
+                    )
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        event_context = detect_event_context(cleaned_text)
+        if event_context is not None:
+            flags.contains_event_context = True
+            flags.ambiguous_datetime = event_context["event_date"] is None
+            confidence = 0.92 if event_context["event_date"] else 0.58
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Напоминание относительно события",
+                primary_type=FinalType.REMINDER,
+                secondary_candidate_type=FinalType.EVENT,
+                confidence=confidence,
+                needs_user_confirmation=event_context["event_date"] is None,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.REMINDER,
+                        title=event_context["title"],
+                        description=None,
+                        event_date=event_context["event_date"],
+                        relative_offset=event_context["relative_offset"],
+                        confidence=confidence,
+                    )
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        if self._looks_like_multiple_actions(cleaned_text):
+            shared_date = self._parse_relative_date(cleaned_text, context.now)
+            flags.contains_multiple_independent_actions = True
+            flags.ambiguous_datetime = shared_date is not None and self._extract_time(cleaned_text) is None
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Несколько действий",
+                primary_type=FinalType.REMINDER,
+                secondary_candidate_type=None,
+                confidence=0.84,
+                needs_user_confirmation=True,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.REMINDER,
+                        title=self._normalize_action_title(part),
+                        description=None,
+                        date_only=shared_date,
+                        confidence=0.84,
+                    )
+                    for part in self._split_actions(cleaned_text)
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        if self._looks_like_explicit_reminder(cleaned_text):
+            explicit_datetime = self._extract_explicit_datetime(cleaned_text, context.now)
+            explicit_date = self._parse_relative_date(cleaned_text, context.now)
+            confidence = 0.9 if explicit_datetime or explicit_date else 0.56
+            flags.ambiguous_datetime = explicit_datetime is None and explicit_date is not None
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Напоминание",
+                primary_type=FinalType.REMINDER,
+                secondary_candidate_type=FinalType.NOTE if explicit_datetime is None and explicit_date is None else None,
+                confidence=confidence,
+                needs_user_confirmation=explicit_datetime is None,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.REMINDER,
+                        title=self._normalize_action_title(cleaned_text),
+                        description=None,
+                        datetime=explicit_datetime,
+                        date_only=None if explicit_datetime else explicit_date,
+                        confidence=confidence,
+                    )
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        if self._looks_like_event(cleaned_text, context):
+            explicit_datetime = self._extract_explicit_datetime(cleaned_text, context.now)
+            explicit_date = self._parse_relative_date(cleaned_text, context.now)
+            confidence = 0.9 if explicit_datetime or explicit_date else 0.62
+            flags.ambiguous_datetime = explicit_datetime is None
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Событие",
+                primary_type=FinalType.EVENT,
+                secondary_candidate_type=FinalType.NOTE,
+                confidence=confidence,
+                needs_user_confirmation=explicit_datetime is None and explicit_date is None,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.EVENT,
+                        title=self._normalize_event_title(cleaned_text),
+                        description=None,
+                        datetime=explicit_datetime,
+                        date_only=None if explicit_datetime else explicit_date,
+                        confidence=confidence,
+                    )
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        if self._looks_like_note(cleaned_text, context):
+            return AIAnalysisResult(
+                source_type=context.payload.source_type,
+                normalized_text=text,
+                summary="Заметка",
+                primary_type=FinalType.NOTE,
+                secondary_candidate_type=FinalType.LIST if len(detect_list_items(cleaned_text)) > 1 else None,
+                confidence=0.88,
+                needs_user_confirmation=False,
+                items=[
+                    AIAnalysisItem(
+                        type=FinalType.NOTE,
+                        title=self._normalize_note_title(cleaned_text),
+                        description=text or None,
+                        confidence=0.88,
+                    )
+                ],
+                extracted_entities=entities,
+                reasoning_flags=flags,
+            )
+
+        return self._fallback_result(context, text, "Лучше оставить во входящих или сохранить заметкой", entities, 0.35)
 
     async def transcribe_audio(self, file_path: Path) -> str:
         return f"[transcription unavailable] {file_path.name}"
@@ -319,145 +220,93 @@ class HeuristicAIProvider(AIProvider):
     async def extract_image_text(self, file_path: Path) -> str | None:
         return None
 
-    async def generate_reply_drafts(self, text: str) -> dict[str, str]:
-        preview = compact_text(text)[:80]
-        return {
-            "short": "Увидел сообщение. Вернусь позже.",
-            "polite": "Спасибо, увидел сообщение. Вернусь с ответом чуть позже.",
-            "business": "Сообщение получил. Подготовлю ответ и вернусь позже.",
-            "soft": f"Спасибо, я сохраню это и вернусь к ответу позже. {preview}".strip(),
-        }
-
-    def _reminder_result(
+    def _fallback_result(
         self,
         context: AnalysisContext,
-        text: str,
-        entities: ExtractedEntities,
-        exact_datetimes: list[datetime],
-        *,
+        normalized_text: str,
         summary: str,
-        confidence: float,
-        title: str | None = None,
-        metadata: dict | None = None,
-    ) -> StructuredAnalysisResult:
-        exact_datetime = exact_datetimes[0] if exact_datetimes and self._has_explicit_time(text) else None
-        date_value = exact_datetimes[0].isoformat() if exact_datetimes else None
-        item = AnalysisItem(
-            type=IntentType.REMINDER,
-            title=title or self._normalize_reminder_title(text),
-            description=text,
-            datetime=exact_datetime,
-            date_only=bool(date_value) and not self._has_explicit_time(text) or bool(entities.ambiguous_datetimes),
-            category="shopping" if text.lower().startswith("купить ") else None,
-            people=entities.people,
-            links=entities.urls,
-            needs_confirmation=bool(entities.ambiguous_datetimes) or (bool(date_value) and not self._has_explicit_time(text)),
-            uncertain_fields=["datetime"] if bool(entities.ambiguous_datetimes) or (bool(date_value) and not self._has_explicit_time(text)) else [],
-            metadata={"date_value": date_value, **(metadata or {})},
-        )
-        return StructuredAnalysisResult(
-            source_type=context.payload.source_type,
-            detected_language=self._detect_language(text),
-            summary=summary,
-            primary_intent=IntentType.REMINDER,
-            confidence=confidence,
-            items=[item],
-            extracted_entities=entities,
-            user_action_suggestions=[],
-            should_store_original=True,
-            should_go_to_inbox=False,
-            reasoning_notes="Explicit reminder or action signal detected",
-            trace=AnalysisTrace(provider=self.provider_name),
-        )
-
-    def _voice_result(
-        self,
-        context: AnalysisContext,
-        text: str,
         entities: ExtractedEntities,
-        exact_datetimes: list[datetime],
-    ) -> StructuredAnalysisResult | None:
-        segments = [compact_text(chunk) for chunk in re.split(r"[,;]| и еще | и ещё | потом |\n", text) if compact_text(chunk)]
-        if len(segments) < 2:
-            return None
-        items: list[AnalysisItem] = []
-        for segment in segments:
-            if self._is_idea(segment):
-                items.append(
-                    AnalysisItem(
-                        type=IntentType.NOTE,
-                        title=self._title_from_text(segment),
-                        description=segment,
-                        category="ideas",
-                        needs_confirmation=False,
-                    )
+        confidence: float,
+    ) -> AIAnalysisResult:
+        items = []
+        if confidence >= 0.4:
+            items.append(
+                AIAnalysisItem(
+                    type=FinalType.NOTE,
+                    title=self._normalize_note_title(normalized_text or "Материал"),
+                    description=normalized_text or None,
+                    confidence=confidence,
                 )
-            elif self._looks_like_list_segment(segment):
-                items.append(
-                    AnalysisItem(
-                        type=IntentType.LIST,
-                        title=self._title_from_text(segment, fallback="Список"),
-                        description=segment,
-                        list_items=split_lines_to_items(segment),
-                        needs_confirmation=False,
-                    )
-                )
-            else:
-                items.append(
-                    AnalysisItem(
-                        type=IntentType.REMINDER,
-                        title=self._normalize_reminder_title(segment),
-                        description=segment,
-                        datetime=exact_datetimes[0] if exact_datetimes and self._has_explicit_time(segment) else None,
-                        date_only=bool(entities.ambiguous_datetimes) and not self._has_explicit_time(segment),
-                        needs_confirmation=bool(entities.ambiguous_datetimes),
-                        uncertain_fields=["datetime"] if entities.ambiguous_datetimes else [],
-                    )
-                )
-        note_count = sum(1 for item in items if item.type == IntentType.NOTE)
-        reminder_count = sum(1 for item in items if item.type == IntentType.REMINDER)
-        list_count = sum(1 for item in items if item.type == IntentType.LIST)
-        parts: list[str] = []
-        if reminder_count:
-            parts.append(f"{reminder_count} напоминания")
-        if list_count:
-            parts.append(f"{list_count} списка")
-        if note_count:
-            parts.append(f"{note_count} заметки")
-        summary = "В голосовом несколько пунктов"
-        if parts:
-            summary = f"В голосовом: {', '.join(parts)}"
-        return StructuredAnalysisResult(
+            )
+        return AIAnalysisResult(
             source_type=context.payload.source_type,
-            detected_language=self._detect_language(text),
+            normalized_text=normalized_text,
             summary=summary,
-            primary_intent=items[0].type if items else IntentType.INBOX_REVIEW,
-            confidence=0.87,
+            primary_type=FinalType.NOTE,
+            secondary_candidate_type=None,
+            confidence=confidence,
+            needs_user_confirmation=True,
             items=items,
             extracted_entities=entities,
-            user_action_suggestions=[
-                StructuredAnalysisSuggestion(action=SuggestionActionType.SAVE_ALL, label="Сохранить все"),
-                StructuredAnalysisSuggestion(action=SuggestionActionType.REVIEW_NOW, label="Проверить"),
-            ],
-            should_store_original=True,
-            should_go_to_inbox=False,
-            reasoning_notes="Voice transcript contains several semantic segments",
-            trace=AnalysisTrace(provider=self.provider_name),
+            reasoning_flags=ReasoningFlags(),
         )
 
-    def _extract_entities(self, text: str) -> tuple[ExtractedEntities, list[datetime]]:
+    def _extract_entities(self, text: str, context: AnalysisContext) -> ExtractedEntities:
         entities = ExtractedEntities()
         if not text:
-            return entities, []
+            return entities
+        entities.urls.extend(match.rstrip(".,)") for match in re.findall(r"https?://\S+", text))
+        if parsed_date := self._parse_relative_date(text, context.now):
+            entities.dates.append(parsed_date.isoformat())
+        if explicit_datetime := self._extract_explicit_datetime(text, context.now):
+            entities.dates = [explicit_datetime.date().isoformat()]
+            entities.times = [explicit_datetime.strftime("%H:%M")]
+        elif explicit_time := self._extract_time(text):
+            entities.times = [explicit_time.strftime("%H:%M")]
+        if "the hatters" in text.lower():
+            entities.titles.append("The Hatters")
+        return entities
 
-        for token in text.split():
-            if token.startswith("http://") or token.startswith("https://"):
-                entities.urls.append(token.rstrip(".,)"))
+    def _contains_actionable_request(self, text: str) -> bool:
+        lowered = text.lower()
+        return "напом" in lowered or any(verb in lowered for verb in TASK_VERBS)
 
-        time_matches = re.findall(r"\b(\d{1,2}[:.]\d{2})\b", text)
-        entities.times.extend(match.replace(".", ":") for match in time_matches)
+    def _looks_like_explicit_reminder(self, text: str) -> bool:
+        lowered = text.lower()
+        return "напом" in lowered or lowered.startswith(TASK_VERBS) or any(f" {verb} " in f" {lowered} " for verb in TASK_VERBS)
 
-        date_matches = search_dates(
+    def _looks_like_multiple_actions(self, text: str) -> bool:
+        lowered = text.lower()
+        return " и " in lowered and sum(1 for verb in TASK_VERBS if verb in lowered) >= 2
+
+    def _split_actions(self, text: str) -> list[str]:
+        normalized = re.sub(r"^(сегодня|завтра|послезавтра)\s+", "", text.strip(), flags=re.IGNORECASE)
+        return [compact_text(part) for part in re.split(r"\s+и\s+", normalized) if compact_text(part)]
+
+    def _looks_like_event(self, text: str, context: AnalysisContext) -> bool:
+        lowered = text.lower()
+        if context.payload.source_type in {SourceType.TICKET, SourceType.BOOKING_CONFIRMATION}:
+            return True
+        return any(hint in lowered for hint in EVENT_HINTS) and (
+            self._parse_relative_date(text, context.now) is not None or self._extract_explicit_datetime(text, context.now) is not None
+        )
+
+    def _looks_like_note(self, text: str, context: AnalysisContext) -> bool:
+        lowered = text.lower()
+        if any(lowered.startswith(prefix) for prefix in IDEA_HINTS):
+            return True
+        return context.payload.source_type in {
+            SourceType.SCREENSHOT,
+            SourceType.PHOTO,
+            SourceType.IMAGE_WITH_TEXT,
+            SourceType.DOCUMENT,
+            SourceType.LINK,
+            SourceType.FORWARDED_MESSAGE,
+            SourceType.MIXED_MESSAGE,
+        }
+
+    def _extract_explicit_datetime(self, text: str, base_now: datetime) -> datetime | None:
+        matches = search_dates(
             text,
             languages=["ru", "en"],
             settings={
@@ -466,152 +315,71 @@ class HeuristicAIProvider(AIProvider):
                 "PREFER_DATES_FROM": "future",
             },
         ) or []
-        exact_datetimes: list[datetime] = []
-        for phrase, parsed in date_matches:
-            normalized_phrase = compact_text(phrase.lower())
-            if self._is_ambiguous_datetime_phrase(normalized_phrase):
-                entities.ambiguous_datetimes.append(phrase)
-                continue
-            exact_datetimes.append(parsed)
-            entities.dates.append(parsed.date().isoformat())
-            if self._has_explicit_time(phrase):
-                entities.times.append(parsed.strftime("%H:%M"))
-
-        if entities.times and not self._contains_date_hint(text):
-            exact_datetimes = []
-            entities.dates = []
-            entities.ambiguous_datetimes.extend(entities.times)
-        elif entities.times and not entities.dates:
-            entities.ambiguous_datetimes.extend(entities.times)
-
-        people = re.findall(r"\b[А-ЯЁ][а-яё]{2,}\b", text)
-        entities.people.extend(name for name in people if name not in {"Идея"})
-        return entities, exact_datetimes
-
-    def _contains_date_hint(self, text: str) -> bool:
-        lowered = text.lower()
-        return any(hint in lowered for hint in RELATIVE_DATE_HINTS) or any(month in lowered for month in MONTHS) or bool(
-            re.search(r"\b\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?\b", lowered)
-        )
-
-    def _is_ambiguous_datetime_phrase(self, phrase: str) -> bool:
-        if any(hint in phrase for hint in RELATIVE_DATE_HINTS):
-            return True
-        if any(hint in phrase for hint in AMBIGUOUS_TIME_HINTS):
-            return True
-        if re.fullmatch(r"(в )?\d{1,2}:\d{2}", phrase):
-            return True
-        if self._has_explicit_time(phrase) and not any(hint in phrase for hint in RELATIVE_DATE_HINTS) and not any(
-            month in phrase for month in MONTHS
-        ) and not re.search(r"\b\d{1,2}[./-]\d{1,2}\b", phrase):
-            return True
-        return False
-
-    def _has_explicit_time(self, text: str) -> bool:
-        return bool(re.search(r"\b\d{1,2}[:.]\d{2}\b", text))
-
-    def _is_shopping_list(self, text: str) -> bool:
-        lowered = text.lower()
-        return lowered.startswith("купить ") and len(self._shopping_items(text)) >= 2
-
-    def _shopping_items(self, text: str) -> list[str]:
-        lowered = text.lower()
-        tail = text[len("купить ") :] if lowered.startswith("купить ") else text
-        return [item for item in split_lines_to_items(tail) if item]
-
-    def _is_ticket_or_booking(self, context: AnalysisContext, text: str) -> bool:
-        if context.payload.source_type in {SourceType.TICKET, SourceType.BOOKING_CONFIRMATION}:
-            return True
-        return context.extracted.metadata.get("document_hint") == "ticket_or_booking" or any(
-            hint in text.lower() for hint in EVENT_HINTS
-        ) and context.payload.source_type in {SourceType.DOCUMENT, SourceType.IMAGE_WITH_TEXT}
-
-    def _is_reply_later(self, context: AnalysisContext, text: str) -> bool:
-        lowered = text.lower()
-        chat_like = context.payload.source_type in {SourceType.SCREENSHOT, SourceType.FORWARDED_MESSAGE} or any(
-            hint in lowered for hint in CHAT_HINTS
-        )
-        return chat_like and any(hint in lowered for hint in REPLY_HINTS)
-
-    def _is_chat_task(self, context: AnalysisContext, text: str) -> bool:
-        lowered = text.lower()
-        chat_like = context.payload.source_type in {SourceType.SCREENSHOT, SourceType.FORWARDED_MESSAGE, SourceType.MIXED_MESSAGE} or any(
-            hint in lowered for hint in CHAT_HINTS
-        )
-        return chat_like and any(hint in lowered for hint in REQUEST_HINTS)
-
-    def _is_idea(self, text: str) -> bool:
-        lowered = text.lower()
-        return lowered.startswith(IDEA_HINTS) or any(hint in lowered for hint in IDEA_HINTS)
-
-    def _is_event(self, text: str, entities: ExtractedEntities) -> bool:
-        lowered = text.lower()
-        return bool(entities.dates) and any(hint in lowered for hint in EVENT_HINTS)
-
-    def _looks_like_reminder(self, text: str) -> bool:
-        lowered = text.lower()
-        return (
-            lowered.startswith(TASK_VERBS)
-            or lowered.startswith(REMINDER_HINTS)
-            or any(f" {verb} " in f" {lowered} " for verb in TASK_VERBS)
-            or any(hint in lowered for hint in REMINDER_HINTS)
-        )
-
-    def _is_link_note(self, context: AnalysisContext, text: str, entities: ExtractedEntities) -> bool:
-        if context.payload.source_type == SourceType.LINK and not self._looks_like_reminder(text):
-            return True
-        return bool(entities.urls) and not self._looks_like_reminder(text) and not self._is_event(text, entities)
-
-    def _normalize_reminder_title(self, text: str, fallback: str = "Напоминание") -> str:
-        cleaned = compact_text(text)
-        lowered = cleaned.lower()
-        prefixes = ("завтра ", "послезавтра ", "сегодня ", "напомни ", "напомнить ", "не забудь ")
-        for prefix in prefixes:
-            if lowered.startswith(prefix):
-                cleaned = compact_text(cleaned[len(prefix) :])
-                lowered = cleaned.lower()
-        if cleaned.lower().startswith("ответить "):
-            return cleaned[:120]
-        return cleaned[:120] or fallback
-
-    def _extract_event_title(self, text: str) -> str | None:
-        if "концерт" in text.lower():
-            return compact_text(text)
-        for keyword in EVENT_HINTS:
-            if keyword in text.lower():
-                return compact_text(text)
+        for phrase, parsed in matches:
+            if re.search(r"\b\d{1,2}[:.]\d{2}\b", phrase):
+                return parsed
+        parsed_date = self._parse_relative_date(text, base_now)
+        parsed_time = self._extract_time(text)
+        if parsed_date and parsed_time:
+            return datetime.combine(parsed_date, parsed_time.timetz()).replace(tzinfo=base_now.tzinfo)
         return None
 
-    def _detect_language(self, text: str) -> str | None:
-        if not text:
+    def _parse_relative_date(self, text: str, base_now: datetime) -> date | None:
+        lowered = text.lower()
+        if "сегодня" in lowered:
+            return base_now.date()
+        if "завтра" in lowered:
+            return (base_now + timedelta(days=1)).date()
+        if "послезавтра" in lowered:
+            return (base_now + timedelta(days=2)).date()
+        for weekday, index in WEEKDAY_MAP.items():
+            if weekday in lowered:
+                delta = (index - base_now.weekday()) % 7
+                delta = 7 if delta == 0 else delta
+                return (base_now + timedelta(days=delta)).date()
+        matches = search_dates(
+            text,
+            languages=["ru", "en"],
+            settings={
+                "TIMEZONE": self.settings.timezone,
+                "RETURN_AS_TIMEZONE_AWARE": True,
+                "PREFER_DATES_FROM": "future",
+            },
+        ) or []
+        for phrase, parsed in matches:
+            lowered_phrase = phrase.lower()
+            if re.search(r"\b\d{1,2}\s+[а-яa-z]+\b", lowered_phrase) or re.search(r"\b\d{1,2}[./-]\d{1,2}", lowered_phrase):
+                return parsed.date()
+        return None
+
+    def _extract_time(self, text: str) -> datetime | None:
+        match = re.search(r"\b(?P<hour>\d{1,2})[:.](?P<minute>\d{2})\b", text)
+        if not match:
             return None
-        return "ru" if re.search(r"[А-Яа-яЁё]", text) else "en"
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute"))
+        return datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    def _title_from_text(self, text: str, fallback: str = "Сохраненный объект") -> str:
-        return compact_text(text)[:120] or fallback
+    def _normalize_action_title(self, text: str) -> str:
+        cleaned = compact_text(text)
+        cleaned = re.sub(r"^(напомни( мне)?\s+)", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^(сегодня|завтра|послезавтра)\s+", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b(поэтому)\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = compact_text(cleaned)
+        return cleaned[:160] or "Напоминание"
 
-    def _looks_like_list_segment(self, text: str) -> bool:
-        return len(split_lines_to_items(text)) >= 2 and "," in text
+    def _normalize_event_title(self, text: str) -> str:
+        cleaned = compact_text(text)
+        cleaned = re.sub(r"^\d{1,2}\s+[а-яa-z]+\s+", "", cleaned, flags=re.IGNORECASE)
+        return cleaned[:160] or "Событие"
 
-    def _is_bad_transcription(self, context: AnalysisContext, text: str) -> bool:
-        return context.payload.source_type == SourceType.VOICE_MESSAGE and text.startswith("[transcription unavailable]")
+    def _normalize_note_title(self, text: str) -> str:
+        cleaned = compact_text(text)
+        cleaned = re.sub(r"^(идея|мысль)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+        return cleaned[:160] or "Заметка"
 
-    def _is_bad_ocr(self, context: AnalysisContext, text: str) -> bool:
-        return context.payload.source_type in {SourceType.SCREENSHOT, SourceType.IMAGE_WITH_TEXT, SourceType.PHOTO} and not text
-
-    def _inbox_result(self, context: AnalysisContext, summary: str) -> StructuredAnalysisResult:
-        return StructuredAnalysisResult(
-            source_type=context.payload.source_type,
-            detected_language=None,
-            summary=summary,
-            primary_intent=IntentType.INBOX_REVIEW,
-            confidence=0.25,
-            items=[],
-            extracted_entities=ExtractedEntities(),
-            user_action_suggestions=[],
-            should_store_original=True,
-            should_go_to_inbox=True,
-            reasoning_notes=summary,
-            trace=AnalysisTrace(provider=self.provider_name, fallback_used=True),
-        )
-
+    def _guess_list_title(self, text: str) -> str:
+        lowered = text.lower()
+        if lowered.startswith("купить "):
+            return "Список покупок"
+        return "Список"

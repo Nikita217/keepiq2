@@ -38,6 +38,10 @@ class IncomingItem(Base, TimestampMixin):
     summary: Mapped[str | None] = mapped_column(Text)
     needs_confirmation: Mapped[bool] = mapped_column(Boolean, default=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ai_summary: Mapped[str | None] = mapped_column(Text)
+    ai_primary_type: Mapped[str | None] = mapped_column(String(32), index=True)
+    ai_secondary_candidate_type: Mapped[str | None] = mapped_column(String(32), index=True)
+    ai_confidence: Mapped[float | None] = mapped_column(Float)
 
     user = relationship("User", back_populates="incoming_items")
     attachments = relationship("Attachment", back_populates="incoming_item", cascade="all, delete-orphan")
@@ -118,4 +122,3 @@ class ObjectLink(Base, TimestampMixin):
     object_id: Mapped[str] = mapped_column(String(64), index=True)
 
     incoming_item = relationship("IncomingItem", back_populates="object_links")
-

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from models import AIAnalysisResult, Attachment, IncomingItem, ObjectLink, ParsedEntity, ProcessingLog
+from models.enums import ParseStatus
 from repositories.base import BaseRepository
 
 
@@ -37,6 +38,7 @@ class IncomingRepository(BaseRepository):
         stmt = (
             select(IncomingItem)
             .where(IncomingItem.user_id == user_id)
+            .where(IncomingItem.parse_status.in_([ParseStatus.NEW.value, ParseStatus.PROCESSING.value, ParseStatus.NEEDS_REVIEW.value]))
             .order_by(desc(IncomingItem.needs_confirmation), desc(IncomingItem.created_at))
             .limit(limit)
             .options(

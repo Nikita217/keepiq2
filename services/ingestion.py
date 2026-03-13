@@ -2,20 +2,17 @@
 
 import hashlib
 from pathlib import Path
-from urllib.parse import urlparse
 
 from ai.base import AIProvider
-from domain.enums import ConfidenceLevel, IntentType
-from domain.models import StructuredAnalysisResult
+from domain.action_models import ActionSuggestion
 from models import AIAnalysisResult, Attachment, IncomingItem, ParsedEntity, ProcessingLog
 from models.enums import IncomingType, ParseStatus
 from repositories.incoming import IncomingRepository
-from services.analysis import AnalysisService
+from services.message_interpretation_service import MessageInterpretationService
 from services.object_builder import ObjectBuilderService
 from storage.base import StorageAdapter
 from utils.time import now_local
 from utils.text import compact_text
-
 
 TEXT_DOCUMENT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml"}
 
@@ -24,9 +21,10 @@ class IngestionService:
     def __init__(self, session, *, provider: AIProvider, storage: StorageAdapter) -> None:
         self.session = session
         self.repo = IncomingRepository(session)
-        self.analysis = AnalysisService(provider)
+        self.interpreter = MessageInterpretationService(provider)
         self.object_builder = ObjectBuilderService(session)
         self.storage = storage
+        self.provider = provider
 
     async def ingest_text(
         self,
@@ -57,6 +55,7 @@ class IngestionService:
             metadata_json={
                 "forwarded": forwarded,
                 "source_signature": self._build_text_signature(text),
+                "forwarded_text": text if forwarded else None,
             },
             parse_status=ParseStatus.PROCESSING.value,
         )
@@ -142,87 +141,78 @@ class IngestionService:
         return item
 
     async def _analyze_and_materialize(self, item: IncomingItem, attachments: list[Attachment] | None) -> None:
-        analysis_result, context = await self.analysis.orchestrator.analyze_with_context(item, attachments=attachments)
-        if any(analysis_item.type == IntentType.REPLY_LATER for analysis_item in analysis_result.items):
-            drafts = await self.analysis.generate_reply_drafts(
-                context.extracted.extracted_text or item.raw_text or analysis_result.summary
-            )
-            for analysis_item in analysis_result.items:
-                if analysis_item.type == IntentType.REPLY_LATER:
-                    analysis_item.metadata["draft_replies"] = drafts
-
-        assistant_response = self.analysis.build_user_response(analysis_result)
-        if analysis_result.primary_intent == IntentType.SAVE_ONLY and item.source_url:
-            domain = urlparse(item.source_url).netloc
-            analysis_result.summary = analysis_result.summary or f"Ссылка сохранена: {domain}"
-
+        bundle = await self.interpreter.interpret(item, attachments=attachments)
         metadata_json = dict(item.metadata_json or {})
         metadata_json.update(
             {
-                "assistant_response": assistant_response,
-                "analysis_provider": analysis_result.trace.provider,
-                "analysis_model": analysis_result.trace.model,
-                "suggested_actions": [action.model_dump(mode="json") for action in analysis_result.user_action_suggestions],
-                "confidence_level": analysis_result.confidence_level.value if analysis_result.confidence_level else None,
-                "source_signals": context.extracted.source_signals,
-                "extraction_errors": context.extracted.extraction_errors,
+                "assistant_response": bundle.assistant_response,
+                "suggested_actions": [action.model_dump(mode="json") for action in bundle.actions],
+                "source_signals": bundle.context.extracted.source_signals,
+                "extraction_errors": bundle.context.extracted.extraction_errors,
             }
         )
         item.metadata_json = metadata_json
-        item.extracted_text = context.extracted.extracted_text
-        item.transcript_text = context.extracted.transcript
-        item.ocr_text = context.extracted.ocr_text
-        item.parsed_entities_json = analysis_result.extracted_entities.model_dump(mode="json")
-        item.analysis_result_json = analysis_result.model_dump(mode="json")
-        item.summary = analysis_result.summary
-        item.proposed_type = analysis_result.primary_intent.value
-        item.confidence = analysis_result.confidence
-        item.needs_confirmation = analysis_result.should_go_to_inbox or any(
-            analysis_item.needs_confirmation for analysis_item in analysis_result.items
-        )
+        item.extracted_text = bundle.context.extracted.extracted_text
+        item.transcript_text = bundle.context.extracted.transcript
+        item.ocr_text = bundle.context.extracted.ocr_text
+        item.parsed_entities_json = bundle.resolved.extracted_entities.model_dump(mode="json")
+        item.analysis_result_json = bundle.analysis.model_dump(mode="json")
+        item.summary = bundle.resolved.summary
+        item.proposed_type = bundle.resolved.primary_type.value
+        item.confidence = bundle.resolved.confidence
+        item.needs_confirmation = bundle.resolved.needs_user_confirmation
         item.processed_at = now_local()
-        item.parse_status = ParseStatus.NEEDS_REVIEW.value if item.needs_confirmation else ParseStatus.CONFIRMED.value
+        item.ai_summary = bundle.analysis.summary
+        item.ai_primary_type = bundle.analysis.primary_type.value
+        item.ai_secondary_candidate_type = (
+            bundle.analysis.secondary_candidate_type.value if bundle.analysis.secondary_candidate_type else None
+        )
+        item.ai_confidence = bundle.analysis.confidence
+
+        created_links = []
+        if bundle.should_auto_create:
+            created_links = await self.object_builder.materialize_drafts(
+                user_id=item.user_id,
+                incoming_item_id=item.id,
+                drafts=bundle.drafts,
+                upsert=True,
+            )
+            item.parse_status = ParseStatus.CONFIRMED.value
+            item.needs_confirmation = False
+        else:
+            item.parse_status = ParseStatus.NEEDS_REVIEW.value
+
+        item.linked_objects_json = [{"object_type": link.object_type, "object_id": link.object_id} for link in created_links]
 
         await self.repo.add_analysis(
             AIAnalysisResult(
                 incoming_item_id=item.id,
-                provider=analysis_result.trace.provider,
-                model=analysis_result.trace.model,
-                prompt_version=analysis_result.trace.prompt_version,
-                summary=analysis_result.summary,
-                proposed_type=analysis_result.primary_intent.value,
-                confidence=analysis_result.confidence,
-                result_json=analysis_result.model_dump(mode="json"),
-                fallback_used=analysis_result.trace.fallback_used,
+                provider=self.provider.provider_name,
+                model=getattr(self.provider, "model", None),
+                prompt_version="v2",
+                summary=bundle.analysis.summary,
+                proposed_type=bundle.analysis.primary_type.value,
+                confidence=bundle.analysis.confidence,
+                result_json=bundle.analysis.model_dump(mode="json"),
+                fallback_used=False,
             )
         )
-        for entity in self._flatten_entities(item.id, analysis_result):
+        for entity in self._flatten_entities(item.id, bundle.resolved.extracted_entities.model_dump(mode="json"), bundle.resolved.confidence):
             await self.repo.add_entity(entity)
-
-        created_links = []
-        if self._should_materialize(analysis_result):
-            created_links = await self.object_builder.materialize(
-                user_id=item.user_id,
-                incoming_item_id=item.id,
-                result=analysis_result,
-                upsert=True,
-            )
-        item.linked_objects_json = [
-            {"object_type": link.object_type, "object_id": link.object_id} for link in created_links
-        ]
         await self.repo.add_log(
             ProcessingLog(
                 incoming_item_id=item.id,
                 stage="analysis",
-                message=f"Analyzed as {analysis_result.primary_intent.value}",
-                payload_json=analysis_result.model_dump(mode="json"),
+                message=f"Analyzed as {bundle.resolved.primary_type.value}",
+                payload_json={
+                    "analysis": bundle.analysis.model_dump(mode="json"),
+                    "resolved": bundle.resolved.model_dump(mode="json"),
+                },
             )
         )
 
-    def _flatten_entities(self, incoming_item_id, analysis_result: StructuredAnalysisResult) -> list[ParsedEntity]:
+    def _flatten_entities(self, incoming_item_id, data: dict, confidence: float) -> list[ParsedEntity]:
         entities: list[ParsedEntity] = []
-        data = analysis_result.extracted_entities.model_dump(mode="json")
-        source = analysis_result.trace.provider
         for entity_type, values in data.items():
             if not values:
                 continue
@@ -233,18 +223,11 @@ class IngestionService:
                         entity_type=entity_type,
                         value=str(value),
                         normalized_value=str(value),
-                        confidence=analysis_result.confidence,
-                        source=source,
+                        confidence=confidence,
+                        source=self.provider.provider_name,
                     )
                 )
         return entities
-
-    def _should_materialize(self, result: StructuredAnalysisResult) -> bool:
-        if result.should_go_to_inbox:
-            return False
-        if any(item.needs_confirmation for item in result.items):
-            return False
-        return result.confidence_level == ConfidenceLevel.HIGH and bool(result.items)
 
     def _extract_document_text(self, *, filename: str, content_type: str, content: bytes) -> str | None:
         suffix = Path(filename).suffix.lower()
@@ -280,4 +263,3 @@ class IngestionService:
         digest.update(filename.encode("utf-8", errors="ignore"))
         digest.update(content[:2048])
         return digest.hexdigest()
-

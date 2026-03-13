@@ -3,14 +3,14 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from domain.models import AnalysisContext, StructuredAnalysisResult
+from domain.analysis_models import AIAnalysisResult, AnalysisContext
 
 
 class AIProvider(ABC):
     provider_name: str = "base"
 
     @abstractmethod
-    async def analyze(self, context: AnalysisContext) -> StructuredAnalysisResult:
+    async def analyze(self, context: AnalysisContext) -> AIAnalysisResult:
         raise NotImplementedError
 
     @abstractmethod
@@ -20,7 +20,5 @@ class AIProvider(ABC):
     async def extract_image_text(self, file_path: Path) -> str | None:
         return None
 
-    @abstractmethod
     async def generate_reply_drafts(self, text: str) -> dict[str, str]:
-        raise NotImplementedError
-
+        return {}

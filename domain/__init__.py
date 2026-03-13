@@ -1,29 +1,40 @@
-﻿from domain.enums import ConfidenceLevel, IntentType, SourceType, SuggestionActionType
+﻿from domain.enums import ActionKind, ConfidenceLevel, FinalType, IntentType, SourceType, SuggestionActionType
 from domain.models import (
+    AIAnalysisResult,
+    ActionSuggestion,
     AnalysisContext,
     AnalysisItem,
-    AnalysisTrace,
+    EntityDraft,
     ExtractedContent,
     ExtractedEntities,
     NormalizedAttachment,
     NormalizedIncomingPayload,
+    ReasoningFlags,
+    RelativeOffset,
+    ResolvedAnalysisResult,
     StructuredAnalysisResult,
     StructuredAnalysisSuggestion,
 )
 
 __all__ = [
+    "AIAnalysisResult",
+    "ActionKind",
+    "ActionSuggestion",
     "AnalysisContext",
     "AnalysisItem",
-    "AnalysisTrace",
     "ConfidenceLevel",
+    "EntityDraft",
     "ExtractedContent",
     "ExtractedEntities",
+    "FinalType",
     "IntentType",
     "NormalizedAttachment",
     "NormalizedIncomingPayload",
+    "ReasoningFlags",
+    "RelativeOffset",
+    "ResolvedAnalysisResult",
     "SourceType",
     "StructuredAnalysisResult",
     "StructuredAnalysisSuggestion",
     "SuggestionActionType",
 ]
-

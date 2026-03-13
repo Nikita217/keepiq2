@@ -1,9 +1,8 @@
 ﻿from __future__ import annotations
 
-from models import Attachment, IncomingItem
+from domain.analysis_models import NormalizedAttachment, NormalizedIncomingPayload
 from domain.enums import SourceType
-from domain.models import NormalizedAttachment, NormalizedIncomingPayload
-
+from models import Attachment, IncomingItem
 
 SOURCE_TYPE_MAP = {
     "plain_text": SourceType.PLAIN_TEXT,
@@ -26,22 +25,24 @@ class InputNormalizer:
         source_attachments = attachments if attachments is not None else list(item.attachments)
         payload_attachments = [self._normalize_attachment(attachment) for attachment in source_attachments]
         source_type = SOURCE_TYPE_MAP.get(item.incoming_type or "", SourceType.UNKNOWN)
-        if payload_attachments and item.raw_text and source_type in {SourceType.PHOTO, SourceType.DOCUMENT}:
+        if payload_attachments and item.raw_text and source_type in {SourceType.PHOTO, SourceType.DOCUMENT, SourceType.SCREENSHOT}:
             source_type = SourceType.MIXED_MESSAGE
+        metadata = dict(item.metadata_json or {})
         return NormalizedIncomingPayload(
             incoming_id=str(item.id),
             user_id=item.user_id,
             source_type=source_type,
             raw_text=item.raw_text,
             caption=item.original_caption,
+            forwarded_text=str(metadata.get("forwarded_text")) if metadata.get("forwarded_text") else None,
             source_url=item.source_url,
             media_type=item.media_type,
-            forwarded=bool((item.metadata_json or {}).get("forwarded")) or source_type == SourceType.FORWARDED_MESSAGE,
+            forwarded=bool(metadata.get("forwarded")) or source_type == SourceType.FORWARDED_MESSAGE,
             original_message_id=item.original_message_id or item.telegram_message_id,
             original_chat_id=item.original_chat_id or item.telegram_chat_id,
             original_caption=item.original_caption,
             attachments=payload_attachments,
-            metadata=dict(item.metadata_json or {}),
+            metadata=metadata,
         )
 
     def _normalize_attachment(self, attachment: Attachment) -> NormalizedAttachment:
