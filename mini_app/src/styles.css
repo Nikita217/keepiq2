@@ -14,7 +14,8 @@
   --danger: #af3e2f;
   --shadow-lg: 0 22px 60px rgba(24, 34, 31, 0.12);
   --shadow-sm: 0 10px 30px rgba(24, 34, 31, 0.08);
-  font-family: "Aptos", "Segoe UI Variable Text", "Trebuchet MS", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI",
+    Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   background:
     radial-gradient(circle at top left, rgba(217, 111, 54, 0.16), transparent 28%),
@@ -34,6 +35,10 @@ body,
 
 body {
   margin: 0;
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button,
