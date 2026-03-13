@@ -75,8 +75,8 @@ export function App() {
   const pendingInboxCount = buildInboxSummary(inbox);
   const dayLabel = formatDayLabel(new Date());
   const userName = getTelegramFirstName();
-  const title = userName ? `${userName}, РІРѕС‚ РІР°С€ РґРµРЅСЊ` : "Р’РѕС‚ РІР°С€ РґРµРЅСЊ";
-  const subtitle = `${dayLabel}. РЎРЅР°С‡Р°Р»Р° РІСЃС‘, С‡С‚Рѕ РІР°Р¶РЅРѕ РЅР° СЃРµРіРѕРґРЅСЏ, Р° РІС‹РїРѕР»РЅРµРЅРЅРѕРµ Рё РІС…РѕРґСЏС‰РµРµ РѕСЃС‚Р°СЋС‚СЃСЏ РїРѕРґ СЂСѓРєРѕР№, РЅРѕ РЅРµ РјРµС€Р°СЋС‚.`;
+  const title = userName ? `${userName}, вот ваш день` : "Вот ваш день";
+  const subtitle = `${dayLabel}. Сначала всё, что важно на сегодня, а выполненное и входящее остаются под рукой, но не мешают.`;
 
   async function mutate(action: () => Promise<void>) {
     setMutationError(null);
@@ -286,7 +286,7 @@ export function App() {
       <div className="contentWrap">
         {error ? <section className="errorBanner">{error}</section> : null}
         {mutationError ? <section className="errorBanner">{mutationError}</section> : null}
-        {isLoading ? <EmptyState title="Р—Р°РіСЂСѓР¶Р°СЋ KeepIQ" text="РЎРѕР±РёСЂР°СЋ РІР°С€Рё РѕР±СЉРµРєС‚С‹ РІ РЅРѕРІС‹Р№ today-first РёРЅС‚РµСЂС„РµР№СЃ." /> : null}
+        {isLoading ? <EmptyState title="Загружаю KeepIQ" text="Собираю ваши объекты в новый today-first интерфейс." /> : null}
 
         {!isLoading && tab === "today" ? (
           <TodayPage
@@ -353,4 +353,5 @@ export function App() {
     </main>
   );
 }
+
 

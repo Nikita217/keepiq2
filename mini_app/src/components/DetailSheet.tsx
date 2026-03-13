@@ -204,11 +204,11 @@ export function DetailSheet({
 
   const options = availableTypeOptions(entity.kind);
   const sourceHint = entity.kind === "incoming"
-    ? `РСЃС‚РѕС‡РЅРёРє: ${entity.item.incoming_type}`
+    ? `Источник: ${entity.item.incoming_type}`
     : entity.kind === "saved"
       ? entity.item.source_url
       : "source_incoming_item_id" in entity.item && entity.item.source_incoming_item_id
-        ? `РСЃС‚РѕС‡РЅРёРє #${entity.item.source_incoming_item_id}`
+        ? `Источник #${entity.item.source_incoming_item_id}`
         : null;
   const originalPreview = getIncomingPreview(entity);
   const hasTimeControls = isTimedType(draft.type) || draft.date.length > 0;
@@ -221,10 +221,10 @@ export function DetailSheet({
         <div className="sheetHeader">
           <div>
             <p className="screenEyebrow">{getTypeLabel(entity.kind)}</p>
-            <h2>{entity.kind === "incoming" ? "Р Р°Р·РѕР±СЂР°С‚СЊ РІС…РѕРґСЏС‰РµРµ" : "РљР°СЂС‚РѕС‡РєР° РѕР±СЉРµРєС‚Р°"}</h2>
+            <h2>{entity.kind === "incoming" ? "Разобрать входящее" : "Карточка объекта"}</h2>
             {scheduledAt ? <p className="sheetSubtle">{formatLongDateTime(scheduledAt)}</p> : null}
           </div>
-          <button type="button" className="ghost iconButton" onClick={onClose} aria-label="Р—Р°РєСЂС‹С‚СЊ">{"Г—"}</button>
+          <button type="button" className="ghost iconButton" onClick={onClose} aria-label="Закрыть">{"×"}</button>
         </div>
 
         <div className="sheetScrollArea">
@@ -244,25 +244,25 @@ export function DetailSheet({
           ) : null}
 
           <label className="fieldBlock">
-            <span>РќР°Р·РІР°РЅРёРµ</span>
+            <span>Название</span>
             <input value={draft.title} onChange={(event) => setDraft((current) => (current ? { ...current, title: event.target.value } : current))} />
           </label>
 
           <label className="fieldBlock">
-            <span>{entity.kind === "list" ? "РћРїРёСЃР°РЅРёРµ СЃРїРёСЃРєР°" : "РћРїРёСЃР°РЅРёРµ"}</span>
+            <span>{entity.kind === "list" ? "Описание списка" : "Описание"}</span>
             <textarea value={draft.description} onChange={(event) => setDraft((current) => (current ? { ...current, description: event.target.value } : current))} rows={4} />
           </label>
 
           {entity.kind === "note" || entity.kind === "list" ? (
             <label className="fieldBlock">
-              <span>{entity.kind === "note" ? "РўРёРї Р·Р°РјРµС‚РєРё" : "РљР°С‚РµРіРѕСЂРёСЏ СЃРїРёСЃРєР°"}</span>
+              <span>{entity.kind === "note" ? "Тип заметки" : "Категория списка"}</span>
               <input value={draft.kind} onChange={(event) => setDraft((current) => (current ? { ...current, kind: event.target.value } : current))} />
             </label>
           ) : null}
 
           {entity.kind === "saved" ? (
             <label className="fieldBlock">
-              <span>РЎСЃС‹Р»РєР°</span>
+              <span>Ссылка</span>
               <input value={draft.sourceUrl} onChange={(event) => setDraft((current) => (current ? { ...current, sourceUrl: event.target.value } : current))} />
             </label>
           ) : null}
@@ -270,11 +270,11 @@ export function DetailSheet({
           {hasTimeControls ? (
             <div className="sheetDateRow">
               <label className="fieldBlock compactField">
-                <span>Р”Р°С‚Р°</span>
+                <span>Дата</span>
                 <input type="date" value={draft.date} onChange={(event) => setDraft((current) => (current ? { ...current, date: event.target.value } : current))} />
               </label>
               <label className="fieldBlock compactField">
-                <span>Р’СЂРµРјСЏ</span>
+                <span>Время</span>
                 <input type="time" value={draft.time} onChange={(event) => setDraft((current) => (current ? { ...current, time: event.target.value } : current))} />
               </label>
               <button
@@ -282,14 +282,14 @@ export function DetailSheet({
                 className="ghost clearDateButton"
                 onClick={() => setDraft((current) => (current ? { ...current, date: "", time: "" } : current))}
               >
-                РЈР±СЂР°С‚СЊ РґР°С‚Сѓ
+                Убрать дату
               </button>
             </div>
           ) : null}
 
           {entity.kind === "list" ? (
             <div className="fieldBlock">
-              <span>РџСѓРЅРєС‚С‹ СЃРїРёСЃРєР°</span>
+              <span>Пункты списка</span>
               <div className="listEditor">
                 {draft.listItems.map((item, index) => (
                   <div key={`${item.id ?? index}`} className="listEditorRow">
@@ -315,7 +315,7 @@ export function DetailSheet({
                         ...current,
                         listItems: current.listItems.filter((_, entryIndex) => entryIndex !== index),
                       } : current))}
-                      aria-label="РЈРґР°Р»РёС‚СЊ РїСѓРЅРєС‚"
+                      aria-label="Удалить пункт"
                     >
                       {"-"}
                     </button>
@@ -329,7 +329,7 @@ export function DetailSheet({
                     listItems: [...current.listItems, { text: "", is_done: false }],
                   } : current))}
                 >
-                  Р”РѕР±Р°РІРёС‚СЊ РїСѓРЅРєС‚
+                  Добавить пункт
                 </button>
               </div>
             </div>
@@ -339,7 +339,7 @@ export function DetailSheet({
 
           {originalPreview ? (
             <div className="sheetInfo">
-              <strong className="sheetInfoTitle">РћСЂРёРіРёРЅР°Р»</strong>
+              <strong className="sheetInfoTitle">Оригинал</strong>
               <div>{originalPreview}</div>
             </div>
           ) : null}
@@ -348,18 +348,18 @@ export function DetailSheet({
         <div className="sheetFooter">
           {entity.kind !== "incoming" ? (
             <button type="button" className="ghost danger" onClick={() => onDelete(entity)} disabled={busy}>
-              РЈРґР°Р»РёС‚СЊ
+              Удалить
             </button>
           ) : <span className="sheetFooterSpacer" />}
 
           <div className="sheetFooterActions">
             {canComplete ? (
               <button type="button" className="ghost" onClick={() => onComplete(entity)} disabled={busy}>
-                РћС‚РјРµС‚РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРЅС‹Рј
+                Отметить выполненным
               </button>
             ) : null}
             <button type="button" onClick={() => onSave(entity, draft)} disabled={busy || !draft.title.trim()}>
-              {busy ? "РЎРѕС…СЂР°РЅСЏСЋ..." : entity.kind === "incoming" ? "РџРѕРґС‚РІРµСЂРґРёС‚СЊ" : "РЎРѕС…СЂР°РЅРёС‚СЊ"}
+              {busy ? "Сохраняю..." : entity.kind === "incoming" ? "Подтвердить" : "Сохранить"}
             </button>
           </div>
         </div>
