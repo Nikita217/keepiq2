@@ -34,7 +34,7 @@ export function formatDayLabel(date: Date): string {
 export function formatShortDate(value: string | Date | null | undefined): string {
   const date = value instanceof Date ? value : parseDate(value ?? null);
   if (!date) {
-    return "\u0411\u0435\u0437 \u0434\u0430\u0442\u044b";
+    return "Без даты";
   }
   return new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short" }).format(date);
 }
@@ -42,7 +42,7 @@ export function formatShortDate(value: string | Date | null | undefined): string
 export function formatLongDateTime(value: string | Date | null | undefined): string {
   const date = value instanceof Date ? value : parseDate(value ?? null);
   if (!date) {
-    return "\u0411\u0435\u0437 \u0434\u0430\u0442\u044b";
+    return "Без даты";
   }
   return new Intl.DateTimeFormat(LOCALE, {
     day: "numeric",
@@ -55,7 +55,7 @@ export function formatLongDateTime(value: string | Date | null | undefined): str
 export function formatTime(value: string | Date | null | undefined): string {
   const date = value instanceof Date ? value : parseDate(value ?? null);
   if (!date) {
-    return "\u0411\u0435\u0437 \u0432\u0440\u0435\u043c\u0435\u043d\u0438";
+    return "Без времени";
   }
   return new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit" }).format(date);
 }

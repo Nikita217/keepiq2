@@ -31,6 +31,7 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
 }
 
 body {
@@ -39,6 +40,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 button,
@@ -86,11 +88,13 @@ svg {
 }
 
 .appShell {
-  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .contentWrap {
-  max-width: 840px;
+  width: min(100%, 840px);
   margin: 0 auto;
   padding: 1.25rem 1rem calc(7.5rem + env(safe-area-inset-bottom));
 }
@@ -103,6 +107,11 @@ svg {
 .screenHeader {
   display: grid;
   gap: 0.85rem;
+  min-width: 0;
+}
+
+.screenHeaderCopy {
+  min-width: 0;
 }
 
 .screenEyebrow {
@@ -118,6 +127,7 @@ svg {
   margin: 0.15rem 0 0;
   font-size: clamp(2rem, 8vw, 3.25rem);
   line-height: 0.96;
+  overflow-wrap: anywhere;
 }
 
 .screenSubtitle,
@@ -125,6 +135,7 @@ svg {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .screenActions,
@@ -255,6 +266,7 @@ svg {
 .sectionBlock {
   display: grid;
   gap: 0.95rem;
+  min-width: 0;
 }
 
 .sectionHead {
@@ -334,6 +346,7 @@ svg {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.85rem;
   padding: 0.8rem;
+  min-width: 0;
 }
 
 .plannerCheck {
@@ -361,6 +374,8 @@ svg {
 .searchCard,
 .agendaCard {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   text-align: left;
   padding: 0.95rem;
 }
@@ -372,6 +387,7 @@ svg {
 .agendaCard strong {
   display: block;
   font-size: 1.02rem;
+  overflow-wrap: anywhere;
 }
 
 .plannerBody p,
@@ -382,6 +398,7 @@ svg {
   margin: 0.45rem 0 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .plannerTopline,
@@ -414,6 +431,7 @@ svg {
 .plannerAside {
   display: flex;
   align-items: stretch;
+  min-width: 0;
 }
 
 .quickStack,
@@ -449,6 +467,7 @@ svg {
 .heroSearch {
   display: grid;
   gap: 0.6rem;
+  min-width: 0;
 }
 
 .libraryCard,
@@ -576,6 +595,7 @@ svg {
   border-radius: 30px 30px 24px 24px;
   display: grid;
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .sheetHeader,
@@ -652,6 +672,11 @@ svg {
 
   .bottomNav {
     width: calc(100vw - 0.8rem);
+  }
+
+  .tabButton {
+    min-width: 0;
+    padding-inline: 0.1rem;
   }
 }
 

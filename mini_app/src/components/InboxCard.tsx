@@ -3,19 +3,19 @@ import { getTypeLabel } from "../utils/models";
 
 function confidenceLabel(value: number | null): string {
   if (value === null) {
-    return "\u0431\u0435\u0437 \u043e\u0446\u0435\u043d\u043a\u0438";
+    return "без оценки";
   }
   if (value >= 0.85) {
-    return `\u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c ${Math.round(value * 100)}%`;
+    return `уверенность ${Math.round(value * 100)}%`;
   }
   if (value >= 0.65) {
-    return `\u043d\u0443\u0436\u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 ${Math.round(value * 100)}%`;
+    return `нужна проверка ${Math.round(value * 100)}%`;
   }
-  return `\u043d\u0435 \u0443\u0432\u0435\u0440\u0435\u043d ${Math.round(value * 100)}%`;
+  return `не уверен ${Math.round(value * 100)}%`;
 }
 
 export function InboxCard({ item, onOpen, onResolve }: { item: IncomingItem; onOpen: () => void; onResolve: (targetType: string) => void }) {
-  const preview = item.raw_text ?? item.transcript_text ?? item.ocr_text ?? item.source_url ?? "\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u0432\u043e \u0432\u043b\u043e\u0436\u0435\u043d\u0438\u044f\u0445";
+  const preview = item.raw_text ?? item.transcript_text ?? item.ocr_text ?? item.source_url ?? "Оригинал сохранён во вложениях";
 
   return (
     <article className="inboxCard">
@@ -24,7 +24,7 @@ export function InboxCard({ item, onOpen, onResolve }: { item: IncomingItem; onO
           <span className={item.needs_confirmation ? "confidencePill warning" : "confidencePill"}>{confidenceLabel(item.confidence)}</span>
           <span className="kindBadge subtle">{getTypeLabel(item.proposed_type ?? "incoming")}</span>
         </div>
-        <strong>{item.summary ?? item.proposed_type ?? "\u0412\u0445\u043e\u0434\u044f\u0449\u0435\u0435"}</strong>
+        <strong>{item.summary ?? item.proposed_type ?? "Входящее"}</strong>
         <p>{item.assistant_response ?? preview}</p>
         {item.clarification_question ? <div className="inlineHint">{item.clarification_question}</div> : null}
         <div className="chipRow">
@@ -37,7 +37,7 @@ export function InboxCard({ item, onOpen, onResolve }: { item: IncomingItem; onO
             {action.label}
           </button>
         ))}
-        <button type="button" className="ghost" onClick={() => onResolve("note")}>\u041a\u0430\u043a \u0437\u0430\u043c\u0435\u0442\u043a\u0443</button>
+        <button type="button" className="ghost" onClick={() => onResolve("note")}>Как заметку</button>
       </div>
     </article>
   );

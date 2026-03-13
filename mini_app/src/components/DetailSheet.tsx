@@ -147,11 +147,11 @@ export function DetailSheet({
 
   const options = availableTypeOptions(entity.kind);
   const sourceHint = entity.kind === "incoming"
-    ? `\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a: ${entity.item.incoming_type}`
+    ? `Источник: ${entity.item.incoming_type}`
     : entity.kind === "saved"
       ? entity.item.source_url
       : "source_incoming_item_id" in entity.item && entity.item.source_incoming_item_id
-        ? `\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a #${entity.item.source_incoming_item_id}`
+        ? `Источник #${entity.item.source_incoming_item_id}`
         : null;
   const hasTimeControls = isTimedType(draft.type) || draft.date.length > 0;
   const scheduledAt = mergeDateAndTime(draft.date, draft.time);
@@ -162,10 +162,10 @@ export function DetailSheet({
         <div className="sheetHeader">
           <div>
             <p className="screenEyebrow">{getTypeLabel(entity.kind)}</p>
-            <h2>{entity.kind === "incoming" ? "\u0420\u0430\u0437\u043e\u0431\u0440\u0430\u0442\u044c \u0432\u0445\u043e\u0434\u044f\u0449\u0435\u0435" : "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430"}</h2>
+            <h2>{entity.kind === "incoming" ? "Разобрать входящее" : "Карточка объекта"}</h2>
             {scheduledAt ? <p className="sheetSubtle">{formatLongDateTime(scheduledAt)}</p> : null}
           </div>
-          <button type="button" className="ghost iconButton" onClick={onClose}>{"\u00D7"}</button>
+          <button type="button" className="ghost iconButton" onClick={onClose}>{"×"}</button>
         </div>
 
         {canConvert(entity.kind) ? (
@@ -184,25 +184,25 @@ export function DetailSheet({
         ) : null}
 
         <label className="fieldBlock">
-          <span>\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435</span>
+          <span>Название</span>
           <input value={draft.title} onChange={(event) => setDraft((current) => current ? { ...current, title: event.target.value } : current)} />
         </label>
 
         <label className="fieldBlock">
-          <span>{entity.kind === "list" ? "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0441\u043f\u0438\u0441\u043a\u0430" : "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435"}</span>
+          <span>{entity.kind === "list" ? "Описание списка" : "Описание"}</span>
           <textarea value={draft.description} onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)} rows={4} />
         </label>
 
         {entity.kind === "note" || entity.kind === "list" ? (
           <label className="fieldBlock">
-            <span>{entity.kind === "note" ? "\u0422\u0438\u043f \u0437\u0430\u043c\u0435\u0442\u043a\u0438" : "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f \u0441\u043f\u0438\u0441\u043a\u0430"}</span>
+            <span>{entity.kind === "note" ? "Тип заметки" : "Категория списка"}</span>
             <input value={draft.kind} onChange={(event) => setDraft((current) => current ? { ...current, kind: event.target.value } : current)} />
           </label>
         ) : null}
 
         {entity.kind === "saved" ? (
           <label className="fieldBlock">
-            <span>\u0421\u0441\u044b\u043b\u043a\u0430</span>
+            <span>Ссылка</span>
             <input value={draft.sourceUrl} onChange={(event) => setDraft((current) => current ? { ...current, sourceUrl: event.target.value } : current)} />
           </label>
         ) : null}
@@ -210,11 +210,11 @@ export function DetailSheet({
         {hasTimeControls ? (
           <div className="sheetDateRow">
             <label className="fieldBlock compactField">
-              <span>\u0414\u0430\u0442\u0430</span>
+              <span>Дата</span>
               <input type="date" value={draft.date} onChange={(event) => setDraft((current) => current ? { ...current, date: event.target.value } : current)} />
             </label>
             <label className="fieldBlock compactField">
-              <span>\u0412\u0440\u0435\u043c\u044f</span>
+              <span>Время</span>
               <input type="time" value={draft.time} onChange={(event) => setDraft((current) => current ? { ...current, time: event.target.value } : current)} />
             </label>
           </div>
@@ -222,7 +222,7 @@ export function DetailSheet({
 
         {entity.kind === "list" ? (
           <div className="fieldBlock">
-            <span>\u041f\u0443\u043d\u043a\u0442\u044b \u0441\u043f\u0438\u0441\u043a\u0430</span>
+            <span>Пункты списка</span>
             <div className="listEditor">
               {draft.listItems.map((item, index) => (
                 <div key={`${item.id ?? index}`} className="listEditorRow">
@@ -237,14 +237,14 @@ export function DetailSheet({
                   <button type="button" className="ghost iconButton" onClick={() => setDraft((current) => current ? {
                     ...current,
                     listItems: current.listItems.filter((_, entryIndex) => entryIndex !== index),
-                  } : current)}>{"\u2212"}</button>
+                  } : current)}>{"−"}</button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={() => setDraft((current) => current ? {
                 ...current,
                 listItems: [...current.listItems, { text: "", is_done: false }],
               } : current)}>
-                \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u0443\u043d\u043a\u0442
+                Добавить пункт
               </button>
             </div>
           </div>
@@ -253,12 +253,12 @@ export function DetailSheet({
         {sourceHint ? <div className="sheetInfo">{sourceHint}</div> : null}
 
         <div className="sheetFooter">
-          {entity.kind !== "incoming" ? <button type="button" className="ghost danger" onClick={() => onDelete(entity)} disabled={busy}>\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button> : null}
+          {entity.kind !== "incoming" ? <button type="button" className="ghost danger" onClick={() => onDelete(entity)} disabled={busy}>Удалить</button> : null}
           {entity.kind !== "incoming" && ["task", "reminder", "event", "reply_later"].includes(entity.kind) ? (
-            <button type="button" className="ghost" onClick={() => onComplete(entity)} disabled={busy}>\u0413\u043e\u0442\u043e\u0432\u043e</button>
+            <button type="button" className="ghost" onClick={() => onComplete(entity)} disabled={busy}>Готово</button>
           ) : null}
           <button type="button" onClick={() => onSave(entity, draft)} disabled={busy || !draft.title.trim()}>
-            {busy ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u044e..." : entity.kind === "incoming" ? "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c" : "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"}
+            {busy ? "Сохраняю..." : entity.kind === "incoming" ? "Подтвердить" : "Сохранить"}
           </button>
         </div>
       </div>

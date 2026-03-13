@@ -23,15 +23,15 @@ const ACTIVE_REPLY_STATUSES = new Set(["open"]);
 
 export function getTypeLabel(kind: string): string {
   return {
-    task: "\u0414\u0435\u043b\u043e",
-    reminder: "\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435",
-    event: "\u0421\u043e\u0431\u044b\u0442\u0438\u0435",
-    reply_later: "\u041e\u0442\u0432\u0435\u0442\u0438\u0442\u044c",
-    note: "\u0417\u0430\u043c\u0435\u0442\u043a\u0430",
-    list: "\u0421\u043f\u0438\u0441\u043e\u043a",
-    saved: "\u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u043e\u0435",
-    incoming: "\u0412\u0445\u043e\u0434\u044f\u0449\u0435\u0435",
-    save_only: "\u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u043e\u0435",
+    task: "Дело",
+    reminder: "Напоминание",
+    event: "Событие",
+    reply_later: "Ответить",
+    note: "Заметка",
+    list: "Список",
+    saved: "Сохранённое",
+    incoming: "Входящее",
+    save_only: "Сохранённое",
   }[kind] ?? kind;
 }
 
@@ -123,11 +123,11 @@ export function buildTodayGroups(
   ];
 
   const groups: TodayGroup[] = [
-    { key: "overdue", label: "\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e", items: [] },
-    { key: "morning", label: "\u0423\u0442\u0440\u043e", items: [] },
-    { key: "day", label: "\u0414\u0435\u043d\u044c", items: [] },
-    { key: "evening", label: "\u0412\u0435\u0447\u0435\u0440", items: [] },
-    { key: "anytime", label: "\u0411\u0435\u0437 \u0432\u0440\u0435\u043c\u0435\u043d\u0438", items: [] },
+    { key: "overdue", label: "Просрочено", items: [] },
+    { key: "morning", label: "Утро", items: [] },
+    { key: "day", label: "День", items: [] },
+    { key: "evening", label: "Вечер", items: [] },
+    { key: "anytime", label: "Без времени", items: [] },
   ];
 
   const sorted = items.sort((left, right) => {
@@ -235,8 +235,8 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
       filterKind: "list",
       title: list.title,
       preview: list.description,
-      meta: `${list.items.length} \u043f\u0443\u043d\u043a\u0442\u043e\u0432`,
-      progress: list.items.length ? `${done}/${list.items.length} \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043e` : null,
+      meta: `${list.items.length} пунктов`,
+      progress: list.items.length ? `${done}/${list.items.length} выполнено` : null,
       tags: [list.kind],
       updated_at: list.updated_at,
       detail: { kind: "list", item: list },
@@ -249,7 +249,7 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
     filterKind: note.kind === "idea" ? "idea" : "note",
     title: note.title,
     preview: note.body,
-    meta: note.kind === "idea" ? "\u0418\u0434\u0435\u044f" : "\u0417\u0430\u043c\u0435\u0442\u043a\u0430",
+    meta: note.kind === "idea" ? "Идея" : "Заметка",
     progress: null,
     tags: [note.kind],
     updated_at: note.updated_at,
@@ -262,7 +262,7 @@ export function buildLibraryItems(lists: ListEntity[], notes: NoteItem[], saved:
     filterKind: "saved",
     title: item.title,
     preview: item.summary ?? item.source_url,
-    meta: item.source_url ? "\u0421\u0441\u044b\u043b\u043a\u0430 \u0438 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b" : "\u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b",
+    meta: item.source_url ? "Ссылка и материал" : "Сохранённый материал",
     progress: null,
     tags: item.source_url ? ["link"] : ["saved"],
     updated_at: item.updated_at,
@@ -331,7 +331,7 @@ export function resolveSearchResult(result: SearchResult, bundle: {
 
 export function getEntityTitle(entity: DetailEntity): string {
   if (entity.kind === "incoming") {
-    return entity.item.summary ?? entity.item.proposed_type ?? "\u0412\u0445\u043e\u0434\u044f\u0449\u0435\u0435";
+    return entity.item.summary ?? entity.item.proposed_type ?? "Входящее";
   }
   return entity.item.title;
 }
@@ -358,7 +358,7 @@ export function availableTypeOptions(kind: DetailEntity["kind"]): Array<{ value:
       { value: "list", label: getTypeLabel("list") },
       { value: "reply_later", label: getTypeLabel("reply_later") },
       { value: "save_only", label: getTypeLabel("save_only") },
-      { value: "inbox_review", label: "\u041e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0432\u043e \u0432\u0445\u043e\u0434\u044f\u0449\u0438\u0445" },
+      { value: "inbox_review", label: "Оставить во входящих" },
     ];
   }
 
